@@ -1,0 +1,21 @@
+{
+    "schemaVersion": 1,
+    "id": "fuse",
+    "name": "Fuse",
+    "version": "${version}",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "com.manchickas.fuse.Fuse"
+        ]
+    },
+    "mixins": [
+        "fuse.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.18.2",
+        "minecraft": "~${minecraft}",
+        "fabric-api": "*",
+        "java": ">=25"
+    }
+}
