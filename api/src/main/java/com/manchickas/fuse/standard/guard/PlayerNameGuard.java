@@ -12,7 +12,7 @@ import java.util.Objects;
 
 public record PlayerNameGuard(
         @NotNull String name
-) implements Guard.Bound<PlayerEvent<?, ?>> {
+) implements Guard<PlayerEvent<?, ?>> {
 
     public static final GuardType<PlayerEvent<?, ?>, PlayerNameGuard> TYPE = (parser) -> {
         var literal = parser.expectLiteral();

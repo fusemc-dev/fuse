@@ -38,8 +38,6 @@ public final class EventType<E extends Event<E, C>, C extends EventCallback> {
     }
 
     public static @NotNull Option<EventType<?, ?>> lookup(@NotNull Identifier name) {
-        if (name.getNamespace().equals("minecraft") && name.getPath().startsWith("join"))
-            return Option.some(JoinEvent.TYPE);
         return Option.fromNullable(EventType.REGISTRY.getValue(name));
     }
 

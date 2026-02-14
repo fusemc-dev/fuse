@@ -17,7 +17,23 @@ public final class ArrayBuilder<T> {
         this.length = 0;
     }
 
-    public ArrayBuilder<T> append(T value) {
+    public static <T> @NotNull ArrayBuilder<T> withAppended(
+            T @NotNull[] content,
+            T value
+    ) {
+        return new ArrayBuilder<T>(content.length + 1)
+                .appendAll(content)
+                .append(value);
+    }
+
+    public @NotNull ArrayBuilder<T> appendAll(T @NotNull[] xs) {
+        Objects.requireNonNull(xs);
+        for (var x : xs)
+            this.append(x);
+        return this;
+    }
+
+    public @NotNull ArrayBuilder<T> append(T value) {
         if (this.length >= this.buffer.length)
             this.buffer = Arrays.copyOf(this.buffer, this.buffer.length * 2);
         this.buffer[this.length++] = value;

@@ -53,8 +53,8 @@ public final class ScriptLoader implements PreparableReloadListener {
             .build();
 
     private final @NotNull BiMap<Identifier, Context> contexts;
-    private final @NotNull Map<EventType<?, ?>, Set<EventListener.Bound<?, ?>>> boundListeners;
-    private final @NotNull Map<Identifier, Set<EventListener.Unbound>> unboundListeners;
+    private final @NotNull Map<EventType<?, ?>, Set<EventListener<?, ?>>> boundListeners;
+    private final @NotNull Map<Identifier, Set<EventCallback.Unbound>> unboundListeners;
 
     public ScriptLoader() {
         this.contexts = HashBiMap.create();
@@ -81,14 +81,13 @@ public final class ScriptLoader implements PreparableReloadListener {
                 return;
             }
             var identifier = ((EventSelector.Unbound) parsed).identifier();
-            var listener = ((EventSelector.Unbound) parsed)
-                    .bind(Jet.expect(EventCallback.Unbound.TEMPLATE, callback));
+            var listener = Jet.expect(EventCallback.Unbound.TEMPLATE, callback);
             this.unboundListeners.computeIfAbsent(identifier, _ -> new ObjectOpenHashSet<>())
                     .add(listener);
         } catch (ParseException e) {
             var span = e.span();
             if (span instanceof Option.Some<SourceSpan<String>>(var wrapped)) {
-                LOGGER.error("({}) An error occurred whilst parsing an event selector: {}\n{}",
+                LOGGER.error("{} An error occurred whilst parsing an event selector: {}\n{}",
                         wrapped, e.getMessage(), wrapped.format(Charcoal.red()));
                 return;
             }
@@ -105,7 +104,7 @@ public final class ScriptLoader implements PreparableReloadListener {
             var snapshot = ImmutableSet.copyOf(listeners);
             for (var listener : snapshot) {
                 try {
-                    event.acceptListener((EventListener.Bound<E, C>) listener);
+                    event.acceptListener((EventListener<E, C>) listener);
                 } catch (PolyglotException e) {
                     LOGGER.error("An error occurred whilst dispatching an event '{}' to one of its listeners. The faulty listen will be excluded from future dispatch.", type, e);
                     listeners.remove(listener);

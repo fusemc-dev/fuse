@@ -21,20 +21,20 @@ import java.util.Deque;
 
 public final class Parser {
 
-    private final Lexer lexer;
-    private final Deque<Lexeme> buffer;
+    private final @NotNull Lexer lexer;
+    private final @NotNull Deque<Lexeme> buffer;
 
     public Parser(@NotNull String source) {
         this.lexer = new Lexer(source);
         this.buffer = new ArrayDeque<>(16);
     }
 
-    public @NotNull EventSelector<?, ?> parse() throws ParseException {
+    public @NotNull EventSelector parse() throws ParseException {
         if (this.isAtSeparator('#')) {
             this.read();
             var identifier = this.expectIdentifier();
             var parsed = ScriptIdentifier.parse(identifier.value(), Identifier::fromNamespaceAndPath);
-            return this.parseUnboundGuards(parsed);
+            return new EventSelector.Unbound(parsed);
         }
         return this.parseBound();
     }
@@ -58,20 +58,20 @@ public final class Parser {
             this.read();
             if (this.isAtSeparator(']')) {
                 this.read();
-                return new EventSelector.Bound<E, C>(event, new Guard.Bound[0]);
+                return new EventSelector.Bound<E, C>(event, new Guard[0]);
             }
-            var buffer = new ArrayBuilder<Guard.Bound<E>>(8);
+            var buffer = new ArrayBuilder<Guard<E>>(8);
             while (true) {
                 var name = this.expectIdentifier();
                 var type = event.guard(name.value());
                 if (type instanceof Option.Some<GuardType<? super E, ?>>(var wrapped)) {
                     this.expectSeparator('(');
                     var guard = wrapped.parse(this);
-                    buffer.append((Guard.Bound<E>) guard);
+                    buffer.append((Guard<E>) guard);
                     this.expectSeparator(')');
                     if (this.isAtSeparator(']')) {
                         this.read();
-                        return new EventSelector.Bound<>(event, buffer.build(Guard.Bound[]::new));
+                        return new EventSelector.Bound<>(event, buffer.build(Guard[]::new));
                     }
                     this.expectSeparator('|');
                     continue;
@@ -83,46 +83,7 @@ public final class Parser {
                 );
             }
         }
-        return new EventSelector.Bound<E, C>(event, new Guard.Bound[0]);
-    }
-
-    private @NotNull EventSelector.Unbound parseUnboundGuards(@NotNull Identifier event) throws ParseException {
-        var buffer = new ArrayBuilder<Guard.Unbound>(8);
-        if (this.isAtSeparator('[')) {
-            this.read();
-            if (this.isAtSeparator(']')) {
-                this.read();
-                return new EventSelector.Unbound(event, new Guard.Unbound[0]);
-            }
-            while (true) {
-                if (this.peek() instanceof Lexeme.Variadic) {
-                    this.read();
-                    buffer.append(new Guard.Unbound.Variadic());
-                    this.expectSeparator(']');
-                    return new EventSelector.Unbound(event, buffer.build(Guard.Unbound[]::new));
-                }
-                buffer.append(this.parseUnboundGuard());
-                if (this.isAtSeparator(']')) {
-                    this.read();
-                    return new EventSelector.Unbound(event, buffer.build(Guard.Unbound[]::new));
-                }
-                this.expectSeparator(',');
-            }
-        }
-        return new EventSelector.Unbound(event, new Guard.Unbound[0]);
-    }
-
-    private Guard.Unbound parseUnboundGuard() throws ParseException {
-        var lexeme = this.ensureNonEOF(this.read());
-        return switch (lexeme) {
-            case Lexeme.Literal(var value, var _) -> new Guard.Unbound.Literal(value);
-            case Lexeme.Number(var value, var _)  -> new Guard.Unbound.Number(value);
-            case Lexeme.Boolean(var value, var _) -> new Guard.Unbound.Boolean(value);
-            case Lexeme.Null(var _)               -> new Guard.Unbound.Null();
-            case Lexeme.Undefined(var _)          -> new Guard.Unbound.Undefined();
-            case Lexeme.Wildcard(var _)           -> new Guard.Unbound.Wildcard();
-            default -> throw new ParseException("Expected an unbound guard.", lexeme.span());
-        };
+        return new EventSelector.Bound<E, C>(event, new Guard[0]);
     }
 
     public @NotNull Lexeme.Identifier expectIdentifier() throws ParseException {

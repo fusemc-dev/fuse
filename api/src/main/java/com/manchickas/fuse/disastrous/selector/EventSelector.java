@@ -11,23 +11,22 @@ import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
+import java.util.Objects;
 
-public sealed interface EventSelector<L extends EventListener<?, C>, C extends EventCallback> {
-
-    @NotNull L bind(@NotNull C callback);
+public sealed interface EventSelector {
 
     record Bound<E extends Event<E, C>, C extends EventCallback>(
             @NotNull EventType<E, C> type,
-            @NotNull Guard.Bound<? super E> @NotNull[] guards
-    ) implements EventSelector<EventListener.Bound<E, C>, C> {
+            @NotNull Guard<? super E> @NotNull[] guards
+    ) implements EventSelector {
 
-        @Override
-        public @NotNull EventListener.Bound<E, C> bind(@NotNull C callback) {
-            return new EventListener.Bound<>(callback, this.guards);
+        public Bound {
+            Objects.requireNonNull(type);
+            Objects.requireNonNull(guards);
         }
 
-        public @NotNull EventListener.Bound<E, C> bind(@NotNull Value callback) throws TypeException {
-            return new EventListener.Bound<>(this.type.expect(callback), this.guards);
+        public @NotNull EventListener<E, C> bind(@NotNull Value callback) throws TypeException {
+            return new EventListener<>(this.type.expect(callback), this.guards);
         }
 
         @Override
@@ -36,19 +35,15 @@ public sealed interface EventSelector<L extends EventListener<?, C>, C extends E
         }
     }
 
-    record Unbound(
-            @NotNull Identifier identifier,
-            @NotNull Guard.Unbound @NotNull[] guards
-    ) implements EventSelector<EventListener.Unbound, EventCallback.Unbound> {
+    record Unbound(@NotNull Identifier identifier) implements EventSelector {
 
-        @Override
-        public @NotNull EventListener.Unbound bind(EventCallback.@NotNull Unbound callback) {
-            return new EventListener.Unbound(callback, this.guards);
+        public Unbound {
+            Objects.requireNonNull(identifier);
         }
 
         @Override
         public @NotNull String toString() {
-            return String.format("Unbound[identifier=%s, guards=%s]", this.identifier, Arrays.toString(this.guards));
+            return String.format("Unbound[identifier=%s]", this.identifier);
         }
     }
 }

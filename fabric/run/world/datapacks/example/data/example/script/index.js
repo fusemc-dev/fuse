@@ -1,3 +1,6 @@
 script.on("join", (player) => {
-    player.sendMessage("Hello World!");
+    player.sendMessage({
+        text: "Hello World!",
+        color: "red"
+    });
 })
