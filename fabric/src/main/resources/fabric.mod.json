@@ -6,7 +6,7 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "com.manchickas.fuse.Fuse"
+            "dev.fusemc.Fuse"
         ]
     },
     "mixins": [

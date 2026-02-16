@@ -1,4 +1,2 @@
 
-script.on("join", (player) => {
-    player.sendMessage("Hello, world!");
-})
+script.on("")

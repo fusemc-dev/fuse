@@ -1,6 +1,6 @@
 {
     "required": true,
-    "package": "com.manchickas.fuse.mixin",
+    "package": "dev.fusemc.mixin",
     "compatibilityLevel": "JAVA_25",
     "mixins": [
         "ServerLevelMixin"
