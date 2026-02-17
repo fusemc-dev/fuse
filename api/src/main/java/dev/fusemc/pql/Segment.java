@@ -10,7 +10,8 @@ import java.util.Objects;
 
 public sealed interface Segment {
 
-    @NotNull Tag resolve(@NotNull Tag tag);
+    @NotNull Tag resolve(@NotNull Tag tag) throws PathStructureException;
+    void set(@NotNull Tag tag, @NotNull Tag value) throws PathStructureException;
 
     record Member(@NotNull String name) implements Segment {
 
@@ -20,9 +21,18 @@ public sealed interface Segment {
                 var member = ct.get(this.name);
                 if (member != null)
                     return member;
-                throw new RuntimeException("TODO: Member does not exist.");
+                throw new PathStructureException("Member does not exist.");
             }
-            throw new RuntimeException("TODO: Not a compound.");
+            throw new PathStructureException("Not a compound.");
+        }
+
+        @Override
+        public void set(@NotNull Tag tag, @NotNull Tag value) {
+            if (tag instanceof CompoundTag ct) {
+                ct.put(this.name, value);
+                return;
+            }
+            throw new PathStructureException("Not a compound.");
         }
 
         @Override
@@ -36,7 +46,7 @@ public sealed interface Segment {
         public Subscript {
             Objects.requireNonNull(operand);
             if (index < 0)
-                throw new IllegalArgumentException("TODO: Index cannot be negative.");
+                throw new PathStructureException("Index cannot be negative.");
         }
 
         @Override
@@ -45,9 +55,22 @@ public sealed interface Segment {
             if (result instanceof CollectionTag ct) {
                 if (this.index < ct.size())
                     return ct.get(this.index);
-                throw new RuntimeException("TODO: Index out of bounds.");
+                throw new PathStructureException("Index out of bounds.");
             }
-            throw new RuntimeException("TODO: Not a collection.");
+            throw new PathStructureException("Not a collection.");
+        }
+
+        @Override
+        public void set(@NotNull Tag tag, @NotNull Tag value) {
+            var result = this.operand.resolve(tag);
+            if (result instanceof CollectionTag ct) {
+                if (this.index < ct.size()) {
+                    ct.setTag(this.index, value);
+                    return;
+                }
+                throw new PathStructureException("Index out of bounds.");
+            }
+            throw new PathStructureException("Not a collection.");
         }
 
         @Override

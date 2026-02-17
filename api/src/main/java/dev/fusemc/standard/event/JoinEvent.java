@@ -1,6 +1,6 @@
 package dev.fusemc.standard.event;
 
-import com.manchickas.fuse.disastrous.event.*;
+import dev.fusemc.disastrous.event.*;
 import dev.fusemc.disastrous.event.Event;
 import dev.fusemc.disastrous.event.EventCallback;
 import dev.fusemc.disastrous.event.EventType;
