@@ -3,10 +3,14 @@ package dev.fusemc.pql;
 import com.manchickas.quelle.SourceReader;
 import dev.fusemc.ArrayBuilder;
 import dev.fusemc.ParseException;
+import dev.fusemc.pql.path.Path;
+import dev.fusemc.pql.path.Segment;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
 
+// entity.get(string) -> data at that string
+// /data get entity path.to.data
 public class Parser extends SourceReader<String> {
 
     public Parser(@NotNull String source) {

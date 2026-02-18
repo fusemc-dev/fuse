@@ -21,7 +21,7 @@ import java.util.Objects;
 
 public final class ScriptPlayer extends ScriptLivingEntity<ServerPlayer> {
 
-    private static final @NotNull Template<Component> TEXT = new Template<>() {
+    public static final @NotNull Template<Component> TEXT = new Template<>() {
 
         @Override
         public @NotNull Option<Component> parse(@NotNull Value value) {

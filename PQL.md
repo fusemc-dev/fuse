@@ -1,14 +1,14 @@
 # PQL
 
-## 1. Prelude
-
 > Fucking **Path Query Language**
-> 
+>
 > Not to be taken seriously, but we needed some sort of DSL
 > to index into NBT structures, and the existing `NbtPath`
 > was too command-centric.
-> 
+>
 > Since we must create our own, why not make a SQL pun out of it?
+
+## 1. Prelude
 
 **PQL** (A "[Path Query Language](https://en.wikipedia.org/wiki/SQL)") defines a straightforward language for querying NBT structures. A PQL
 expression, also known as a **path**, is a sequence of slash-separated

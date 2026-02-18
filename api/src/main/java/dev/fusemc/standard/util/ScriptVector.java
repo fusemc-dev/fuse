@@ -2,6 +2,7 @@ package dev.fusemc.standard.util;
 
 import com.manchickas.jet.Jet;
 import com.manchickas.jet.template.Template;
+import net.minecraft.world.phys.Vec3;
 import org.graalvm.polyglot.HostAccess;
 import org.jetbrains.annotations.NotNull;
 
@@ -27,6 +28,11 @@ public final class ScriptVector {
         this.x = x;
         this.y = y;
         this.z = z;
+    }
+
+    public static @NotNull ScriptVector fromVec3(@NotNull Vec3 vec) {
+        Objects.requireNonNull(vec);
+        return new ScriptVector(vec.x, vec.y, vec.z);
     }
 
     @HostAccess.Export
@@ -115,6 +121,10 @@ public final class ScriptVector {
     @HostAccess.Export
     public double length() {
         return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }
+
+    public @NotNull Vec3 toVec3() {
+        return new Vec3(this.x, this.y, this.z);
     }
 
     public @NotNull String toString() {

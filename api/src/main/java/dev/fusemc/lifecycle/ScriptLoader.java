@@ -192,6 +192,7 @@ public final class ScriptLoader implements PreparableReloadListener {
     }
 
     private void apply(@NotNull Map<Identifier, Source> prepared) {
+        this.clear(true);
         for (var entry : prepared.entrySet()) {
             var identifier = entry.getKey();
             var source = entry.getValue();
@@ -212,6 +213,19 @@ public final class ScriptLoader implements PreparableReloadListener {
             }
         }
         LOGGER.info("Loaded {} script(s).", this.contexts.size());
+    }
+
+    public void clear(boolean stageProperties) {
+        var iterator = this.contexts.values()
+                .iterator();
+        while (iterator.hasNext()) {
+            var ctx = iterator.next();
+            ctx.close(true);
+            iterator.remove();
+        }
+        this.boundListeners.clear();
+        this.unboundListeners.clear();
+        this.pendingTasks.clear();
     }
 
     private record Task(

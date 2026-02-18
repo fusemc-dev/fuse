@@ -1,7 +1,10 @@
-package dev.fusemc.pql;
+package dev.fusemc.pql.path;
 
+import dev.fusemc.ValueOps;
+import dev.fusemc.pql.PathStructureException;
 import net.minecraft.nbt.CollectionTag;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
@@ -11,7 +14,8 @@ import java.util.Objects;
 public sealed interface Segment {
 
     @NotNull Tag resolve(@NotNull Tag tag) throws PathStructureException;
-    void set(@NotNull Tag tag, @NotNull Tag value) throws PathStructureException;
+
+    void update(@NotNull Tag tag, @NotNull Updater f) throws PathStructureException;
 
     record Member(@NotNull String name) implements Segment {
 
@@ -21,14 +25,30 @@ public sealed interface Segment {
                 var member = ct.get(this.name);
                 if (member != null)
                     return member;
-                throw new PathStructureException("Member does not exist.");
+                throw new PathStructureException("Member '%s' does not exist.".formatted(this.name));
             }
             throw new PathStructureException("Not a compound.");
         }
 
         @Override
-        public void set(@NotNull Tag tag, @NotNull Tag value) {
+        public void update(@NotNull Tag tag, @NotNull Updater f) throws PathStructureException {
             if (tag instanceof CompoundTag ct) {
+                var member = ct.get(this.name);
+                if (member == null) {
+                    var value = ValueOps.instance().convertTo(
+                            NbtOps.INSTANCE,
+                            f.updateMissing()
+                    );
+                    ct.put(this.name, value);
+                    return;
+                }
+                var value = ValueOps.instance().convertTo(
+                        NbtOps.INSTANCE,
+                        f.update(NbtOps.INSTANCE.convertTo(
+                                ValueOps.instance(),
+                                member
+                        ))
+                );
                 ct.put(this.name, value);
                 return;
             }
@@ -61,10 +81,17 @@ public sealed interface Segment {
         }
 
         @Override
-        public void set(@NotNull Tag tag, @NotNull Tag value) {
+        public void update(@NotNull Tag tag, @NotNull Updater f) throws PathStructureException {
             var result = this.operand.resolve(tag);
             if (result instanceof CollectionTag ct) {
                 if (this.index < ct.size()) {
+                    var value = ValueOps.instance().convertTo(
+                            NbtOps.INSTANCE,
+                            f.update(NbtOps.INSTANCE.convertTo(
+                                    ValueOps.instance(),
+                                    ct.get(this.index)
+                            ))
+                    );
                     ct.setTag(this.index, value);
                     return;
                 }

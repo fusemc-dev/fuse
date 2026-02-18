@@ -19,10 +19,11 @@ import java.util.function.Function;
 
 public final class EventType<E extends Event<E, C>, C extends EventCallback> {
 
-    private static final ResourceKey<Registry<EventType<?, ?>>> REGISTRY_KEY
-            = ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath("fuse","event_type"));
-    public static final Registry<EventType<?, ?>> REGISTRY
-            = new MappedRegistry<>(EventType.REGISTRY_KEY, Lifecycle.stable());
+    public static final Registry<EventType<?, ?>> REGISTRY = new MappedRegistry<>(
+            ResourceKey.createRegistryKey(
+                    Identifier.fromNamespaceAndPath("fuse","event_type")
+            ), Lifecycle.stable()
+    );
 
     static {
         Registry.register(REGISTRY, Identifier.withDefaultNamespace("join"), JoinEvent.TYPE);

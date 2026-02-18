@@ -1,13 +1,22 @@
-package dev.fusemc.pql;
+package dev.fusemc.pql.path;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import dev.fusemc.ParseException;
-import net.minecraft.nbt.CompoundTag;
+import dev.fusemc.ValueOps;
+import dev.fusemc.pql.Parser;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
 public final class Path {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Path.class);
 
     private final @NotNull Segment @NotNull[] segments;
 
@@ -15,41 +24,27 @@ public final class Path {
         this.segments = segments;
     }
 
-    static void main() {
-        var nbt = new CompoundTag();
-        var nested = new CompoundTag();
-        nested.putString("bar", "baz");
-        nbt.put("foo", nested);
-        try {
-            var path = Path.compile("foo/bar");
-            System.out.println(path.traverse(nbt));
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static @NotNull Path compile(@NotNull String path) throws ParseException {
-        Objects.requireNonNull(path);
-        return new Parser(path)
-                .parse();
-    }
-
-    public void set(@NotNull Tag root, @NotNull Tag value) {
+    public void update(@NotNull Tag root, @NotNull Updater value) {
+        Objects.requireNonNull(root);
+        Objects.requireNonNull(value);
         var result = root;
         for (var i = 0; i < this.segments.length - 1; i++) {
             var segment = this.segments[i];
             result = segment.resolve(result);
         }
         var last = this.segments[this.segments.length - 1];
-        last.set(result, value);
+        last.update(result, value);
     }
 
-    public @NotNull Tag traverse(@NotNull Tag root) {
+    public @NotNull Value traverse(@NotNull Tag root) {
         Objects.requireNonNull(root);
         var result = root;
         for (var segment : this.segments)
             result = segment.resolve(result);
-        return result;
+        return NbtOps.INSTANCE.convertTo(
+                ValueOps.instance(),
+                result
+        );
     }
 
     @Override
