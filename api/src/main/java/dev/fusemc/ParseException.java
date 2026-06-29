@@ -1,7 +1,7 @@
 package dev.fusemc;
 
 import com.manchickas.optionated.Option;
-import com.manchickas.quelle.position.SourceSpan;
+import com.manchickas.quelle.SourceSpan;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,6 +21,8 @@ public class ParseException extends Exception {
     }
 
     public @NotNull Option<SourceSpan<String>> span() {
-        return Option.fromNullable(this.span);
+        if (this.span != null)
+            return Option.some(this.span);
+        return Option.none();
     }
 }

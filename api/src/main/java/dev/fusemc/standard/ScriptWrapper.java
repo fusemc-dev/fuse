@@ -16,4 +16,17 @@ public abstract class ScriptWrapper<T> {
     public @NotNull T unwrap() {
         return this.wrapped;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (obj instanceof ScriptWrapper<?> other)
+            return this.wrapped.equals(other.wrapped);
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return this.wrapped.hashCode();
+    }
 }

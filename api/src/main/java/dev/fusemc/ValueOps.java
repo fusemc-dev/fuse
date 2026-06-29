@@ -1,34 +1,49 @@
 package dev.fusemc;
 
-import com.google.common.collect.ImmutableMap;
-import com.manchickas.jet.Jet;
-import com.manchickas.jet.exception.TypeException;
-import com.manchickas.jet.template.Template;
+import com.manchickas.optionated.Option;
 import com.mojang.datafixers.util.Pair;
-import com.mojang.serialization.DataResult;
-import com.mojang.serialization.DynamicOps;
-import com.mojang.serialization.Lifecycle;
-import com.mojang.serialization.MapLike;
-import net.minecraft.util.Util;
+import com.mojang.serialization.*;
+import dev.fusemc.standard.ProxyIdentifier;
+import dev.fusemc.tau.Scope;
+import dev.fusemc.tau.Tau;
+import dev.fusemc.tau.Template;
+import dev.fusemc.tau.TypeException;
+import dev.fusemc.tau.description.Description;
+import dev.fusemc.tau.description.Domain;
+import dev.fusemc.tau.proxy.ObjectLike;
+import dev.fusemc.tau.template.Mu;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.ReloadableServerRegistries;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.gamerules.GameRule;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
 import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-/// Defines an [DynamicOps] implementation for Polyglot [Value]s.
-///
-/// Since fuse relies on [Jet], a helper library used to validate Polyglot [Value]s,
-/// the `ValueOps` implementation attempts to delegate as much work as possible
-/// to [Jet], to reduce the code duplication.
 public final class ValueOps implements DynamicOps<Value> {
 
-    private static final @NotNull ValueOps INSTANCE = new ValueOps();
-    private static final @NotNull Template<Value[]> ARRAY = Jet.ANY.array(Value[]::new);
-    private static final @NotNull Template<Map<String, Value>> OBJECT = Jet.map(Jet.ANY);
+    private static final @NotNull ValueOps INSTANCE                   = new ValueOps();
+    private static final @NotNull Template<Value[]> ARRAY             = Template.array(Template.ANY, Value[]::new);
+    private static final @NotNull Template<Map<String, Value>> OBJECT = Template.map(Template.STRING, Template.ANY);
+
+    public static final @NotNull Template<Component> COMPONENT = ValueOps.delegate(ComponentSerialization.CODEC, Description.keyword("Text"));
 
     private ValueOps() {
         // Why don't scientists trust atoms?
@@ -39,9 +54,72 @@ public final class ValueOps implements DynamicOps<Value> {
         return ValueOps.INSTANCE;
     }
 
+    public static <T> @NotNull Template<Holder<T>> holder(@NotNull Registry<T> registry) {
+        Objects.requireNonNull(registry);
+        return new Template<>() {
+
+            @Override
+            public @NonNull Option<Holder<T>> lower(@NonNull Value value) {
+                return ProxyIdentifier.MAPPED_TEMPLATE.lower(value)
+                        .flatMap(i -> registry.get(i)
+                                .map(Option::some)
+                                .orElseGet(Option::none))
+                        .map(h -> h);
+            }
+
+            @Override
+            public @NonNull Option<Value> raise(@Nullable Holder<T> value) {
+                if (value != null)
+                    return value.unwrapKey()
+                            .map(key -> key.identifier().toString())
+                            .map(Template.STRING::raise)
+                            .orElseGet(Option::none);
+                return Option.none();
+            }
+
+            @Override
+            public @NotNull Description describe(@NotNull Scope<@NotNull Mu<?>> points) {
+                return Description.attach(
+                        Description.concat(
+                                Description.delimiter('#'),
+                                Description.keyword(registry.key()
+                                        .identifier()
+                                        .toString())
+                        ),
+                        Domain.DESCRIBE
+                );
+            }
+        };
+    }
+
+    public static <T> @NotNull Template<T> delegate(@NotNull Codec<T> codec,
+                                                    @NotNull Description description) {
+        Objects.requireNonNull(codec);
+        Objects.requireNonNull(description);
+        return new Template<>() {
+
+            @Override
+            public @NotNull Option<T> lower(@NotNull Value value) {
+                return Option.fromOptional(codec.parse(ValueOps.instance(), value).resultOrPartial());
+            }
+
+            @Override
+            public @NotNull Option<@NotNull Value> raise(@Nullable T value) {
+                return Option.fromOptional(codec.encodeStart(ValueOps.instance(), value).resultOrPartial());
+            }
+
+            @Override
+            public @NotNull Description describe(@NotNull Scope<@NotNull Mu<?>> points) {
+                return Description.attach(description, Domain.DESCRIBE);
+            }
+        };
+    }
+
     @Override
     public <U> @NotNull U convertTo(@NotNull DynamicOps<U> ops,
                                     @NotNull Value value) {
+        Objects.requireNonNull(ops);
+        Objects.requireNonNull(value);
         if (value.isNumber()) {
             if (value.fitsInByte())
                 return ops.createByte(value.asByte());
@@ -68,7 +146,7 @@ public final class ValueOps implements DynamicOps<Value> {
 
     @Override
     public @NotNull Value empty() {
-        return Jet.undefined();
+        return Tau.undefined();
     }
 
     @Override
@@ -76,7 +154,7 @@ public final class ValueOps implements DynamicOps<Value> {
         Objects.requireNonNull(value);
         try {
             return DataResult.success(
-                    Jet.expect(Jet.NUMBER, value),
+                    Tau.lower(Template.NUMBER, value),
                     Lifecycle.stable()
             );
         } catch (TypeException e) {
@@ -87,7 +165,7 @@ public final class ValueOps implements DynamicOps<Value> {
     @Override
     public Value createNumeric(@NotNull Number number) {
         Objects.requireNonNull(number);
-        return Value.asValue(number);
+        return Tau.raise(Template.NUMBER, number);
     }
 
     @Override
@@ -95,7 +173,7 @@ public final class ValueOps implements DynamicOps<Value> {
         Objects.requireNonNull(value);
         try {
             return DataResult.success(
-                    Jet.expect(Jet.STRING, value),
+                    Tau.lower(Template.STRING, value),
                     Lifecycle.stable()
             );
         } catch (TypeException e) {
@@ -106,7 +184,7 @@ public final class ValueOps implements DynamicOps<Value> {
     @Override
     public Value createString(@NotNull String s) {
         Objects.requireNonNull(s);
-        return Value.asValue(s);
+        return Tau.raise(Template.STRING, s);
     }
 
     @Override
@@ -114,7 +192,7 @@ public final class ValueOps implements DynamicOps<Value> {
         Objects.requireNonNull(input);
         try {
             return DataResult.success(
-                    Jet.expect(Jet.BOOLEAN, input),
+                    Tau.lower(Template.BOOLEAN, input),
                     Lifecycle.stable()
             );
         } catch (TypeException e) {
@@ -124,16 +202,16 @@ public final class ValueOps implements DynamicOps<Value> {
 
     @Override
     public @NotNull Value createBoolean(boolean value) {
-        return Value.asValue(value);
+        return Tau.raise(Template.BOOLEAN, value);
     }
 
     @Override
-    public @NotNull DataResult<@NotNull Value> mergeToList(@NotNull Value list,
-                                         @NotNull Value entry) {
-        Objects.requireNonNull(list);
+    public @NotNull DataResult<@NotNull Value> mergeToList(@NotNull Value value,
+                                                           @NotNull Value entry) {
+        Objects.requireNonNull(value);
         Objects.requireNonNull(entry);
         try {
-            var array = Jet.expect(ValueOps.ARRAY, list);
+            var array = Tau.lower(ValueOps.ARRAY, value);
             return DataResult.success(
                     Value.asValue(ArrayBuilder.withAppended(array, entry)),
                     Lifecycle.stable()
@@ -144,17 +222,24 @@ public final class ValueOps implements DynamicOps<Value> {
     }
 
     @Override
-    public @NotNull DataResult<@NotNull Value> mergeToMap(@NotNull Value input,
-                                        @NotNull Value key,
-                                        @NotNull Value value) {
-        Objects.requireNonNull(input);
+    public @NotNull DataResult<@NotNull Value> mergeToMap(@NotNull Value map,
+                                                          @NotNull Value key,
+                                                          @NotNull Value value) {
+        Objects.requireNonNull(map);
         Objects.requireNonNull(key);
         Objects.requireNonNull(value);
         try {
-            var object = Jet.expect(ValueOps.OBJECT, input);
-            var _key = Jet.expect(Jet.STRING, key);
+            var object = Tau.lower(ValueOps.OBJECT, map);
+            var _key   = Tau.lower(Template.STRING, key);
+            var buffer = ObjectLike.builder();
+            for (var entry : object.entrySet()) {
+                var k = entry.getKey();
+                if (k.equals(_key))
+                    continue;
+                buffer.append(k, entry.getValue());
+            }
             return DataResult.success(
-                    Value.asValue(Util.copyAndPut(object, _key, value)),
+                    Value.asValue(buffer.append(_key, value).build()),
                     Lifecycle.stable()
             );
         } catch (TypeException e) {
@@ -166,22 +251,22 @@ public final class ValueOps implements DynamicOps<Value> {
     public @NotNull DataResult<@NotNull MapLike<@NotNull Value>> getMap(@NotNull Value input) {
         Objects.requireNonNull(input);
         try {
-            var object = Jet.expect(ValueOps.OBJECT, input);
+            var object = Tau.lower(ValueOps.OBJECT, input);
             return DataResult.success(new MapLike<>() {
 
                 @Override
-                public @Nullable Value get(Value key) {
+                public @Nullable Value get(@NotNull Value key) {
+                    Objects.requireNonNull(key);
                     try {
-                        return this.get(Jet.expect(Jet.STRING, key));
+                        return this.get(Tau.lower(Template.STRING, key));
                     } catch (TypeException e) {
                         throw new RuntimeException(e);
                     }
                 }
 
                 @Override
-                public @Nullable Value get(String key) {
-                    // It is very important to return 'null'
-                    // if the key is missing.
+                public @Nullable Value get(@NotNull String key) {
+                    Objects.requireNonNull(key);
                     return object.get(key);
                 }
 
@@ -204,7 +289,7 @@ public final class ValueOps implements DynamicOps<Value> {
     public @NotNull DataResult<@NotNull Stream<@NotNull Pair<@NotNull Value, @NotNull Value>>> getMapValues(@NotNull Value input) {
         Objects.requireNonNull(input);
         try {
-            var object = Jet.expect(ValueOps.OBJECT, input);
+            var object = Tau.lower(ValueOps.OBJECT, input);
             return DataResult.success(object.entrySet()
                     .stream()
                     .map(e -> Pair.of(
@@ -219,14 +304,8 @@ public final class ValueOps implements DynamicOps<Value> {
     @Override
     public @NotNull Value createMap(@NotNull Stream<Pair<Value, Value>> stream) {
         Objects.requireNonNull(stream);
-        return Value.asValue(stream.collect(ImmutableMap.<Pair<Value, Value>, String, Value>toImmutableMap(
-                entry -> {
-                    try {
-                        return Jet.expect(Jet.STRING, entry.getFirst());
-                    } catch (TypeException e) {
-                        throw new RuntimeException(e);
-                    }
-                },
+        return Value.asValue(stream.collect(ObjectLike.toObject(
+                entry -> Tau.lower(Template.STRING, entry.getFirst()),
                 Pair::getSecond
         )));
     }
@@ -235,7 +314,7 @@ public final class ValueOps implements DynamicOps<Value> {
     public @NotNull DataResult<@NotNull Stream<@NotNull Value>> getStream(@NotNull Value input) {
         Objects.requireNonNull(input);
         try {
-            var array = Jet.expect(ValueOps.ARRAY, input);
+            var array = Tau.lower(ValueOps.ARRAY, input);
             return DataResult.success(Arrays.stream(array));
         } catch (TypeException e) {
             return DataResult.error(e::getMessage);
@@ -254,20 +333,14 @@ public final class ValueOps implements DynamicOps<Value> {
                                  @NotNull String key) {
         Objects.requireNonNull(input);
         Objects.requireNonNull(key);
-        try {
-            var object = Jet.expect(ValueOps.OBJECT, input);
-            var builder = ImmutableMap.<String, Value>builderWithExpectedSize(object.size());
-            for (var entry : object.entrySet()) {
-                if (entry.getKey().equals(key))
-                    continue;
-                builder.put(
-                        entry.getKey(),
-                        entry.getValue()
-                );
-            }
-            return Value.asValue(builder.build());
-        } catch (TypeException e) {
-            throw new RuntimeException(e);
+        var object  = Tau.lower(ValueOps.OBJECT, input);
+        var buffer  = ObjectLike.builder(object.size());
+        for (var entry : object.entrySet()) {
+            var k = entry.getKey();
+            if (key.equals(k))
+                continue;
+            buffer.append(k, entry.getValue());
         }
+        return Value.asValue(buffer.build());
     }
 }

@@ -1,22 +1,14 @@
 package dev.fusemc.pql.path;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import dev.fusemc.ParseException;
 import dev.fusemc.ValueOps;
-import dev.fusemc.pql.Parser;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
 public final class Path {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(Path.class);
 
     private final @NotNull Segment @NotNull[] segments;
 

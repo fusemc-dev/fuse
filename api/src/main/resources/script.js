@@ -1,9 +1,9 @@
 
-// Syringe API
-entity.inject("name", "value");
-entity.operate("name", (name) => [name, '!'])
-entity.sample("foo");
+script.on("foo:bar[guard(value) | another(value)]", () => {
 
-// Round-trip serialization
-entity.set("name", "value");
-entity.get("foo");
+})
+
+script.onCommand("foo/bar/a: integer/b: integer", (ctx) => {
+    const { a, b } = ctx.args();
+    return a + b;
+})

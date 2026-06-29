@@ -5,10 +5,8 @@ plugins {
 
 val artifact: String by project
 
-group = providers.gradleProperty("group")
-    .get()
-version = providers.gradleProperty("version")
-    .get()
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
 
 base {
     archivesName = "$artifact-api"
@@ -22,8 +20,10 @@ val graalVersion: String by project
 val minecraftVersion: String by project
 
 dependencies {
-    api("com.manchickas:jet:1.2.0")
-    implementation("com.manchickas:quelle:1.1.1")
+    api("dev.fusemc:tau:0.2.7")
+    api("dev.fusemc:iota:0.2.3")
+    api("dev.fusemc:quelle:0.1.2")
+    api("com.manchickas:optionated:2.0.2")
     minecraft("com.mojang:minecraft:${minecraftVersion}")
     mappings(loom.officialMojangMappings())
     implementation("org.graalvm.polyglot:polyglot:${graalVersion}")

@@ -9,6 +9,7 @@
             "dev.fusemc.Fuse"
         ]
     },
+    "accessWidener": "fuse.classtweaker",
     "mixins": [
         "fuse.mixins.json"
     ],

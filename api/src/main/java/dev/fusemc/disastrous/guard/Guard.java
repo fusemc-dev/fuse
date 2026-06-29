@@ -1,9 +1,16 @@
 package dev.fusemc.disastrous.guard;
 
-import dev.fusemc.disastrous.event.Event;
+import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.quelle.Diagnostic;
+import dev.fusemc.quelle.StringReader;
 import org.jetbrains.annotations.NotNull;
 
-public interface Guard<E extends Event<?, ?> > {
+public interface Guard<E extends Disaster<?>> {
 
-    boolean satisfies(@NotNull E payload);
+    boolean satisfies(@NotNull E event);
+
+    interface Type<G extends Guard<?>> {
+
+        @NotNull G parse(@NotNull StringReader<String> reader) throws Diagnostic;
+    }
 }

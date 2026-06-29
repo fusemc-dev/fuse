@@ -1,10 +1,11 @@
 package dev.fusemc.syringe;
 
-import com.manchickas.jet.Jet;
-import com.manchickas.optionated.Option;
 import com.mojang.serialization.Lifecycle;
-import dev.fusemc.standard.entity.living.ScriptPlayer;
-import dev.fusemc.standard.util.ScriptVector;
+import dev.fusemc.ValueOps;
+import dev.fusemc.standard.entity.living.ProxyPlayer;
+import dev.fusemc.standard.math.ProxyVec2;
+import dev.fusemc.standard.math.ProxyVec3;
+import dev.fusemc.tau.Template;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
@@ -13,8 +14,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -25,9 +24,7 @@ import java.util.function.Function;
 public abstract class Syringe {
 
     public static final @NotNull Registry<Vaccine<?, ?>> REGISTRY = new MappedRegistry<>(
-            ResourceKey.createRegistryKey(
-                    Identifier.fromNamespaceAndPath("fuse", "vaccine")
-            ),
+            ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath("fuse", "vaccine")),
             Lifecycle.stable()
     );
     private static final @NotNull VarHandle VISUAL_FIRE_HANDLE = Syringe.lookupHandle(Entity.class, "hasVisualFire", boolean.class);
@@ -38,7 +35,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::getAirSupply)
                     .onInject(Entity::setAirSupply)
-                    .withTemplate(Jet.INTEGER)
+                    .withTemplate(Template.INTEGER)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Component> NAME = Syringe.register(
@@ -46,7 +43,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::getName)
                     .onInject(Entity::setCustomName)
-                    .withTemplate(ScriptPlayer.TEXT)
+                    .withTemplate(ValueOps.COMPONENT)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> NAME_VISIBLE = Syringe.register(
@@ -54,7 +51,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::isCustomNameVisible)
                     .onInject(Entity::setCustomNameVisible)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Double> FALL_DISTANCE = Syringe.register(
@@ -62,15 +59,15 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(entity -> entity.fallDistance)
                     .onInject((entity, distance) -> entity.fallDistance = distance)
-                    .withTemplate(Jet.DOUBLE)
+                    .withTemplate(Template.DOUBLE)
                     .build()
     );
-    public static final @NotNull Vaccine<Entity, Integer> FIRE_TICKS = Syringe.register(
+    public static final @NotNull Vaccine<Entity, Integer> FIRE = Syringe.register(
             "fire", Entity.class,
             builder -> builder
                     .onSample(Entity::getRemainingFireTicks)
                     .onInject(Entity::setRemainingFireTicks)
-                    .withTemplate(Jet.INTEGER)
+                    .withTemplate(Template.INTEGER)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> GLOWING = Syringe.register(
@@ -78,7 +75,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::hasGlowingTag)
                     .onInject(Entity::setGlowingTag)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> HAS_VISUAL_FIRE = Syringe.register(
@@ -86,7 +83,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(entity -> (boolean) Syringe.VISUAL_FIRE_HANDLE.get(entity))
                     .onInject(Syringe.VISUAL_FIRE_HANDLE::set)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> INVULNERABLE = Syringe.register(
@@ -94,23 +91,23 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::isInvulnerable)
                     .onInject(Entity::setInvulnerable)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
-    public static final @NotNull Vaccine<Entity, ScriptVector> VELOCITY = Syringe.register(
+    public static final @NotNull Vaccine<Entity, ProxyVec3> VELOCITY = Syringe.register(
             "velocity", Entity.class,
             builder -> builder
-                    .onSample(entity -> ScriptVector.fromVec3(entity.getDeltaMovement()))
+                    .onSample(entity -> ProxyVec3.from(entity.getDeltaMovement()))
                     .onInject((entity, vector) -> entity.setDeltaMovement(vector.toVec3()))
-                    .withTemplate(ScriptVector.TEMPLATE)
+                    .withTemplate(ProxyVec3.TEMPLATE)
                     .build()
     );
-    public static final @NotNull Vaccine<Entity, Boolean> NO_GRAVITY = Syringe.register(
+    public static final @NotNull Vaccine<Entity, Boolean> GRAVITY = Syringe.register(
             "gravity", Entity.class,
             builder -> builder
                     .onSample((entity) -> !entity.isNoGravity())
                     .onInject((entity, flag) -> entity.setNoGravity(!flag))
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> ON_GROUND = Syringe.register(
@@ -118,7 +115,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::onGround)
                     .onInject(Entity::setOnGround)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Integer> PORTAL_COOLDOWN = Syringe.register(
@@ -126,33 +123,26 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::getPortalCooldown)
                     .onInject(Entity::setPortalCooldown)
-                    .withTemplate(Jet.INTEGER)
+                    .withTemplate(Template.INTEGER)
                     .build()
     );
-    public static final @NotNull Vaccine<Entity, ScriptVector> POSITION = Syringe.register(
+    public static final @NotNull Vaccine<Entity, ProxyVec3> POSITION = Syringe.register(
             "position", Entity.class,
             builder -> builder
-                    .onSample(entity -> ScriptVector.fromVec3(entity.position()))
-                    .onInject((entity, vector) -> entity.setPos(vector.toVec3()))
-                    .withTemplate(ScriptVector.TEMPLATE)
+                    .onSample(entity -> ProxyVec3.from(entity.position()))
+                    .onInject((entity, vector) -> entity.snapTo(vector.toVec3()))
+                    .withTemplate(ProxyVec3.TEMPLATE)
                     .build()
     );
-    public static final @NotNull Vaccine<Entity, Float[]> ROTATION = Syringe.register(
+    public static final @NotNull Vaccine<Entity, ProxyVec2> ROTATION = Syringe.register(
             "rotation", Entity.class,
             builder -> builder
-                    .onSample(entity -> new Float[]{
-                            entity.getXRot(),
-                            entity.getYRot()
-                    })
+                    .onSample(entity -> new ProxyVec2(entity.getXRot(), entity.getYRot()))
                     .onInject((entity, rotation) -> {
-                        entity.setXRot(rotation[0]);
-                        entity.setYRot(rotation[1]);
+                        entity.setXRot((float) rotation.x);
+                        entity.setYRot((float) rotation.y);
                     })
-                    .withTemplate(Jet.tuple(
-                            Jet.FLOAT.element(tuple -> tuple[0]),
-                            Jet.FLOAT.element(tuple -> tuple[1]),
-                            (yaw, pitch) -> new Float[]{ yaw, pitch }
-                    ))
+                    .withTemplate(ProxyVec2.TEMPLATE)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Boolean> SILENT = Syringe.register(
@@ -160,7 +150,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::isSilent)
                     .onInject(Entity::setSilent)
-                    .withTemplate(Jet.BOOLEAN)
+                    .withTemplate(Template.BOOLEAN)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, String[]> TAGS = Syringe.register(
@@ -173,7 +163,7 @@ public abstract class Syringe {
                         present.clear();
                         Collections.addAll(present, tags);
                     })
-                    .withTemplate(Jet.STRING.array(String[]::new))
+                    .withTemplate(Template.array(Template.STRING, String[]::new))
                     .build()
     );
     public static final @NotNull Vaccine<Entity, Integer> TICKS_FROZEN = Syringe.register(
@@ -181,7 +171,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::getTicksFrozen)
                     .onInject(Entity::setTicksFrozen)
-                    .withTemplate(Jet.INTEGER)
+                    .withTemplate(Template.INTEGER)
                     .build()
     );
     public static final @NotNull Vaccine<Entity, String> UUID = Syringe.register(
@@ -189,7 +179,7 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(Entity::getStringUUID)
                     .onInject((entity, uuid) -> entity.setUUID(java.util.UUID.fromString(uuid)))
-                    .withTemplate(Jet.STRING)
+                    .withTemplate(Template.STRING)
                     .build()
     );
 
@@ -199,17 +189,12 @@ public abstract class Syringe {
             builder -> builder
                     .onSample(LivingEntity::getAbsorptionAmount)
                     .onInject(LivingEntity::setAbsorptionAmount)
-                    .withTemplate(Jet.FLOAT)
+                    .withTemplate(Template.FLOAT)
                     .build()
     );
-    private static final Logger LOGGER = LoggerFactory.getLogger(Syringe.class);
 
     private Syringe() {
         throw new UnsupportedOperationException();
-    }
-
-    public static @NotNull Option<Vaccine<?, ?>> attemptLookup(@NotNull Identifier name) {
-        return Option.fromNullable(REGISTRY.getValue(name));
     }
 
     private static @NotNull <E extends Entity, T> Vaccine<E, T> register(@NotNull String identifier,

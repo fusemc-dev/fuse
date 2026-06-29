@@ -1,9 +1,8 @@
 package dev.fusemc.syringe;
 
-import com.manchickas.jet.Jet;
-import com.manchickas.jet.exception.TypeException;
-import com.manchickas.jet.template.Template;
 import com.manchickas.optionated.Option;
+import dev.fusemc.tau.Tau;
+import dev.fusemc.tau.Template;
 import net.minecraft.world.entity.Entity;
 import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.Contract;
@@ -41,18 +40,18 @@ public final class Vaccine<E extends Entity, T> {
         Objects.requireNonNull(entity);
         if (this.type.isInstance(entity)) {
             var sample = this.sampler.apply(this.type.cast(entity));
-            return this.template.serialize(sample);
+            return Option.some(Value.asValue(sample));
         }
         return Option.none();
     }
 
-    public boolean attemptInject(@NotNull Entity entity, @NotNull Value value) throws TypeException {
+    public boolean attemptInject(@NotNull Entity entity, @NotNull Value value) {
         Objects.requireNonNull(entity);
         Objects.requireNonNull(value);
         if (this.type.isInstance(entity)) {
             this.injector.accept(
                     this.type.cast(entity),
-                    Jet.expect(this.template, value)
+                    Tau.lower(this.template, value)
             );
             return true;
         }

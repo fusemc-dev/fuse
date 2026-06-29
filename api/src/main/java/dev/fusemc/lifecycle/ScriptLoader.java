@@ -4,30 +4,47 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.manchickas.Charcoal;
-import dev.fusemc.ArrayBuilder;
-import dev.fusemc.ParseException;
-import dev.fusemc.disastrous.event.Event;
-import dev.fusemc.disastrous.event.EventCallback;
-import dev.fusemc.disastrous.event.EventListener;
-import dev.fusemc.disastrous.event.EventType;
-import dev.fusemc.disastrous.selector.EventSelector;
-import dev.fusemc.disastrous.selector.Parser;
-import dev.fusemc.standard.util.ScriptIdentifier;
-import com.manchickas.jet.Jet;
-import com.manchickas.jet.exception.TypeException;
-import com.manchickas.jet.template.Template;
+import com.manchickas.crayon.Crayon;
 import com.manchickas.optionated.Option;
-import com.manchickas.quelle.position.SourceSpan;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.fusemc.ArrayBuilder;
+import dev.fusemc.disastrous.Callback;
+import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.disastrous.Disastrous;
+import dev.fusemc.disastrous.listener.Listener;
+import dev.fusemc.disastrous.listener.selector.Bound;
+import dev.fusemc.disastrous.listener.selector.Unbound;
+import dev.fusemc.iota.Standard;
+import dev.fusemc.lifecycle.property.Property;
+import dev.fusemc.marshal.Command;
+import dev.fusemc.marshal.Marshal;
+import dev.fusemc.marshal.Suggester;
+import dev.fusemc.marshal.path.CommandPath;
+import dev.fusemc.quelle.Diagnostic;
+import dev.fusemc.standard.ProxyIdentifier;
+import dev.fusemc.standard.math.ProxyVec2;
+import dev.fusemc.standard.math.ProxyVec3;
+import dev.fusemc.tau.Tau;
+import dev.fusemc.tau.Template;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.IdentifierArgument;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.graalvm.polyglot.*;
 import org.graalvm.polyglot.io.IOAccess;
+import org.graalvm.polyglot.proxy.ProxyArray;
+import org.graalvm.polyglot.proxy.ProxyExecutable;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +55,22 @@ import java.io.OutputStream;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicLong;
 
-public final class ScriptLoader implements PreparableReloadListener {
+public final class ScriptLoader implements ProxyObject, PreparableReloadListener {
+
+    private static final @NotNull String ON           = "on";
+    private static final @NotNull String ON_PROPERTY  = "onProperty";
+    private static final @NotNull String ON_COMMAND   = "onCommand";
+    private static final @NotNull String ON_SUGGESTER = "onSuggester";
+    private static final @NotNull String DISPATCH     = "dispatch";
+
+    private static final @NotNull String @NotNull[] KEYS = {
+            ScriptLoader.ON,
+            ScriptLoader.ON_PROPERTY,
+            ScriptLoader.ON_COMMAND,
+            ScriptLoader.ON_SUGGESTER,
+            ScriptLoader.DISPATCH,
+    };
 
     private static final FileToIdConverter CONVERTER = new FileToIdConverter("script", ".js");
     private static final Logger LOGGER = LoggerFactory.getLogger(ScriptLoader.class);
@@ -53,113 +83,206 @@ public final class ScriptLoader implements PreparableReloadListener {
             .allowMapAccess(true)
             .build();
 
+    public static final Standard IOTA = Standard.builder()
+            .define(ProxyIdentifier.class, ProxyIdentifier.TEMPLATE)
+            .define(ProxyVec2.class, ProxyVec2.TEMPLATE)
+            .define(ProxyVec3.class, ProxyVec3.TEMPLATE)
+            .build();
+
     private final @NotNull BiMap<Identifier, Context> contexts;
-    private final @NotNull Map<EventType<?, ?>, Set<EventListener<?, ?>>> boundListeners;
-    private final @NotNull Map<Identifier, Set<EventCallback.Unbound>> unboundListeners;
-    private final @NotNull Queue<Task> pendingTasks;
-    // TODO: Do we *need* an AtomicLong here?
-    private final @NotNull AtomicLong tick;
+    private final @NotNull Map<Disaster.Type<?>, Set<Listener<?, ?>>> boundListeners;
+    private final @NotNull Map<ProxyIdentifier, Set<Callback.Unbound>> unboundListeners;
+    private final @NotNull Map<CommandPath, Command> commands;
+    private final @NotNull Map<ProxyIdentifier, Suggester> suggesters;
+    private final @NotNull Map<ProxyIdentifier, Property> properties;
+    private final @NotNull ProxyExecutable on;
+    private final @NotNull ProxyExecutable onProperty;
+    private final @NotNull ProxyExecutable onCommand;
+    private final @NotNull ProxyExecutable onSuggester;
+    private final @NotNull ProxyExecutable dispatch;
 
     public ScriptLoader() {
-        this.contexts = HashBiMap.create();
-        this.boundListeners = new Reference2ReferenceOpenHashMap<>();
+        this.contexts         = HashBiMap.create();
+        this.boundListeners   = new Reference2ReferenceOpenHashMap<>();
         this.unboundListeners = new Object2ReferenceOpenHashMap<>();
-        this.pendingTasks = new PriorityQueue<>();
-        this.tick = new AtomicLong();
+        this.commands         = new Object2ObjectOpenHashMap<>();
+        this.suggesters       = new Object2ObjectOpenHashMap<>();
+        this.properties       = new Object2ObjectOpenHashMap<>();
+        this.on = (args) -> {
+            if (args.length == 2) {
+                try {
+                    var selector = Disastrous.parse(Tau.lower(Template.STRING, args[0]));
+                    if (selector instanceof Bound<?, ?> bound) {
+                        var type     = bound.type();
+                        var listener = bound.bind(args[1]);
+                        this.boundListeners.computeIfAbsent(type, _ -> new ObjectOpenHashSet<>())
+                                .add(listener);
+                        return Tau.undefined();
+                    }
+                    var identifier = ((Unbound) selector).identifier();
+                    var listener   = Tau.lower(Callback.Unbound.TEMPLATE, args[1]);
+                    this.unboundListeners.computeIfAbsent(identifier, _ -> new ObjectOpenHashSet<>())
+                            .add(listener);
+                } catch (Diagnostic e) {
+                    LOGGER.error(e.excerpt(Crayon.brightRed().underline()));
+                    LOGGER.error("An error occurred whilst parsing an event selector: {}", e.getMessage());
+                }
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.onProperty = (args) -> {
+            if (args.length == 2) {
+                var name     = Tau.lower(ProxyIdentifier.TEMPLATE, args[0]);
+                var property = new Property(name, args[1]);
+                this.properties.put(name, property);
+                return property;
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.onCommand = (args) -> {
+            if (args.length == 2) {
+                try {
+                    var path    = Marshal.parse(Tau.lower(Template.STRING, args[0]));
+                    var command = Tau.lower(Command.TEMPLATE, args[1]);
+                    this.commands.put(path, command);
+                } catch (Diagnostic e) {
+                    LOGGER.error(e.excerpt(Crayon.brightRed().underline()));
+                    LOGGER.error("An error occurred whilst parsing a command path: {}", e.getMessage());
+                }
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.onSuggester = (args) -> {
+            if (args.length == 2) {
+                var name      = Tau.lower(ProxyIdentifier.TEMPLATE, args[0]);
+                var suggester = Tau.lower(Suggester.TEMPLATE, args[1]);
+                this.suggesters.put(name, suggester);
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.dispatch = (args) -> {
+            if (args.length == 1) {
+                var identifier = Tau.lower(ProxyIdentifier.TEMPLATE, args[0]);
+                var listeners  = this.unboundListeners.get(identifier);
+                if (listeners != null) {
+                    var snapshot = ImmutableSet.copyOf(listeners);
+                    var buffer   = new ArrayBuilder<Value>(listeners.size());
+                    for (var callback : snapshot) {
+                        try {
+                            buffer.append(callback.onEvent(args));
+                        } catch (PolyglotException e) {
+                            LOGGER.error("An error occurred whilst dispatching an event '{}' to one of its listeners. The faulty listener will be excluded from future dispatch.", identifier,  e);
+                            listeners.remove(callback);
+                        }
+                    }
+                    return buffer.build(Value[]::new);
+                }
+                LOGGER.warn("An event of type '{}' has no listeners, yet a dispatch was attempted.", identifier);
+                return new Value[0];
+            }
+            throw new UnsupportedOperationException();
+        };
     }
 
     public static @NotNull ScriptLoader instance() {
         return ScriptLoader.INSTANCE;
     }
 
-    @HostAccess.Export
-    public void on(@NotNull Value selector, @NotNull Value callback) throws TypeException {
-        Objects.requireNonNull(selector);
-        Objects.requireNonNull(callback);
-        try {
-            var parsed = new Parser(Jet.expect(Jet.STRING, selector))
-                    .parse();
-            if (parsed instanceof EventSelector.Bound<?, ?> bound) {
-                var type = bound.type();
-                var listener = bound.bind(callback);
-                this.boundListeners.computeIfAbsent(type, _ -> new ObjectOpenHashSet<>())
-                        .add(listener);
-                return;
-            }
-            var identifier = ((EventSelector.Unbound) parsed).identifier();
-            var listener = Jet.expect(EventCallback.Unbound.TEMPLATE, callback);
-            this.unboundListeners.computeIfAbsent(identifier, _ -> new ObjectOpenHashSet<>())
-                    .add(listener);
-        } catch (ParseException e) {
-            var span = e.span();
-            if (span instanceof Option.Some<SourceSpan<String>>(var wrapped)) {
-                LOGGER.error("{} An error occurred whilst parsing an event selector: {}\n{}",
-                        wrapped, e.getMessage(), wrapped.format(Charcoal.red()));
-                return;
-            }
-            LOGGER.error("An error occurred whilst parsing an event selector: {}", e.getMessage());
-        }
+    public static @NotNull LiteralArgumentBuilder<CommandSourceStack> createCommand() {
+        var node = Commands.literal("fuse");
+        return node.then(Commands.literal("property")
+                .then(Commands.argument("name", IdentifierArgument.id())
+                        .suggests((_, builder) -> {
+                            var script = ScriptLoader.instance();
+                            return SharedSuggestionProvider.suggestResource(script.properties.keySet().stream()
+                                    .map(ProxyIdentifier::to)
+                                    .toList(), builder);
+                        })
+                        .executes(ctx -> {
+                            var name     = ProxyIdentifier.from(IdentifierArgument.getId(ctx, "name"));
+                            var script   = ScriptLoader.instance();
+                            var property = script.properties.get(name);
+                            var source   = ctx.getSource();
+                            if (property != null) {
+                                var value = property.get();
+                                source.sendSuccess(() -> Component.literal("Property '%s' has value '%s'".formatted(name, value)), false);
+                                return 1;
+                            }
+                            source.sendFailure(Component.literal("Unknown property '%s'".formatted(name)));
+                            return -1;
+                        }))
+                .then(Commands.literal("registries")
+                        .executes(ctx -> {
+                            var source = ctx.getSource();
+                            source.getServer().reloadableRegistries().lookup()
+                                    .listRegistryKeys()
+                                    .forEach(System.out::println);
+                            return 1;
+                        })));
     }
 
-    @HostAccess.Export
-    public void schedule(@NotNull Value callback, long delay) throws TypeException {
-        Objects.requireNonNull(callback);
-        var task = new Task(
-                Jet.expect(ScheduledCallback.TEMPLATE, callback),
-                this.tick.get() + delay
-        );
-        this.pendingTasks.add(task);
+    public void rehydrate(@NotNull Property @NotNull[] properties) {
+        Objects.requireNonNull(properties);
+        var n = 0;
+        for (var candidate : properties) {
+            var name = candidate.identifier();
+            if (this.properties.containsKey(name)) {
+                this.properties.compute(name, (_, property) -> {
+                    assert property != null;
+                    return property.rehydrate(candidate);
+                });
+                n++;
+                continue;
+            }
+            LOGGER.warn("Dropping a property '{}'.", name);
+        }
+        LOGGER.info("Successfully rehydrated {} property(ies).", n);
     }
 
-    @HostAccess.Export
-    public @NotNull Value[] dispatch(@NotNull Value identifier, @NotNull Value... args) throws TypeException, ParseException {
-        var type = ScriptIdentifier.expectVanilla(identifier);
-        var listeners = this.unboundListeners.get(type);
-        if (listeners != null) {
-            var snapshot = ImmutableSet.copyOf(listeners);
-            var buffer = new ArrayBuilder<Value>(listeners.size());
-            for (var callback : snapshot) {
-                try {
-                    buffer.append(callback.onEvent(args));
-                } catch (PolyglotException e) {
-                    LOGGER.error("An error occurred whilst dispatching an event '{}' to one of its listeners. The faulty listener will be excluded from future dispatch.", type,  e);
-                    listeners.remove(callback);
-                }
-            }
-            return buffer.build(Value[]::new);
+    public void refreshTree(@NotNull MinecraftServer server) {
+        Objects.requireNonNull(server);
+        var commands   = server.getCommands();
+        var dispatcher = commands.getDispatcher();
+        var list       = server.getPlayerList();
+        for (var entry : this.commands.entrySet()) {
+            var path    = entry.getKey();
+            var command = entry.getValue();
+            var node    = path.build(command, (name) -> {
+                var suggester = this.suggesters.get(name);
+                return Option.fromNullable(suggester);
+            });
+            dispatcher.register(node);
         }
-        LOGGER.warn("An event of type '{}' has no listeners, yet a dispatch was attempted.", type);
-        return new Value[0];
+        dispatcher.register(ScriptLoader.createCommand());
+        if (list != null)
+            for (var player : list.getPlayers())
+                commands.sendCommands(player);
+        LOGGER.info("Registered {} command(s).", this.commands.size());
     }
 
     @SuppressWarnings("unchecked")
-    public <E extends Event<E, C>, C extends EventCallback> @NotNull E dispatchBound(@NotNull E event) {
+    public <E extends Disaster<C>, C extends Callback> @NotNull E dispatch(@NotNull E event) {
         Objects.requireNonNull(event);
-        var type = event.type();
+        var type      = event.type();
         var listeners = this.boundListeners.get(type);
         if (listeners != null) {
             var snapshot = ImmutableSet.copyOf(listeners);
             for (var listener : snapshot) {
                 try {
-                    event.acceptListener((EventListener<E, C>) listener);
-                } catch (PolyglotException e) {
+                    if (((Listener<E, C>) listener).onEvent(event))
+                        continue;
+                    break;
+                } catch (Exception e) {
                     LOGGER.error("An error occurred whilst dispatching an event '{}' to one of its listeners. The faulty listener will be excluded from future dispatch.", type, e);
                     listeners.remove(listener);
                 }
             }
+            return event;
         }
         return event;
-    }
-
-    public void tickScheduler() {
-        var current = this.tick.getAndIncrement();
-        for (Task task; (task = this.pendingTasks.peek()) != null && current >= task.target; this.pendingTasks.remove()) {
-            try {
-                task.callback.run();
-            } catch (PolyglotException e) {
-                LOGGER.error("An error occurred whilst executing a scheduled task.", e);
-            }
-        }
     }
 
     @Override
@@ -174,7 +297,7 @@ public final class ScriptLoader implements PreparableReloadListener {
 
     private @NotNull Map<Identifier, Source> prepare(@NotNull ResourceManager manager) {
         var resources = ScriptLoader.CONVERTER.listMatchingResources(manager);
-        var buffer = ImmutableMap.<Identifier, Source>builder();
+        var buffer    = ImmutableMap.<Identifier, Source>builder();
         for (var entry : resources.entrySet()) {
             var identifier = ScriptLoader.CONVERTER.fileToId(entry.getKey());
             var resource = entry.getValue();
@@ -191,65 +314,99 @@ public final class ScriptLoader implements PreparableReloadListener {
         return buffer.buildKeepingLast();
     }
 
+    @SuppressWarnings("LoggingPlaceholderCountMatchesArgumentCount")
     private void apply(@NotNull Map<Identifier, Source> prepared) {
-        this.clear(true);
+        Objects.requireNonNull(prepared);
+        var staged = this.refresh();
         for (var entry : prepared.entrySet()) {
-            var identifier = entry.getKey();
-            var source = entry.getValue();
+            var identifier  = entry.getKey();
+            var source      = entry.getValue();
+            var ctx         = Context.newBuilder("js")
+                    .allowHostAccess(ScriptLoader.ACCESS)
+                    .out(OutputStream.nullOutputStream())
+                    .err(OutputStream.nullOutputStream())
+                    .in(InputStream.nullInputStream())
+                    .allowIO(IOAccess.NONE)
+                    .build();
             try {
-                var ctx = Context.newBuilder("js")
-                        .allowHostAccess(ScriptLoader.ACCESS)
-                        .out(OutputStream.nullOutputStream())
-                        .err(OutputStream.nullOutputStream())
-                        .in(InputStream.nullInputStream())
-                        .allowIO(IOAccess.NONE)
-                        .build();
                 var global = ctx.getBindings("js");
                 global.putMember("script", this);
                 ctx.eval(source);
                 this.contexts.put(identifier, ctx);
             } catch (PolyglotException e) {
-                LOGGER.error("An error occurred whilst loading script '{}'.", identifier, e);
+                LOGGER.error("An error occurred whilst loading script '{}'.", identifier, (e.isHostException() ? e.asHostException() : e));
+                ctx.close(true);
             }
         }
         LOGGER.info("Loaded {} script(s).", this.contexts.size());
+        LOGGER.info("Registered {} disaster listener(s).", this.boundListeners.size());
+        this.rehydrate(staged);
     }
 
-    public void clear(boolean stageProperties) {
-        var iterator = this.contexts.values()
-                .iterator();
-        while (iterator.hasNext()) {
-            var ctx = iterator.next();
-            ctx.close(true);
-            iterator.remove();
-        }
-        this.boundListeners.clear();
+    public @NotNull Property @NotNull[] refresh() {
+        var buffer = new ArrayBuilder<Property>(this.properties.size());
+        for (var entry : this.properties.values())
+            buffer.append(entry.unbind());
         this.unboundListeners.clear();
-        this.pendingTasks.clear();
+        this.boundListeners.clear();
+        this.properties.clear();
+        this.commands.clear();
+        this.contexts.forEach((_, ctx) -> ctx.close(true));
+        this.contexts.clear();
+        return buffer.build(Property[]::new);
     }
 
-    private record Task(
-            @NotNull ScheduledCallback callback,
-            long target
-    ) implements Comparable<Task> {
-
-        public Task {
-            Objects.requireNonNull(callback);
-        }
-
-        @Override
-        public int compareTo(@NotNull Task other) {
-            return Long.compare(this.target, other.target);
-        }
+    @Override
+    public Object getMember(@NotNull String key) {
+        Objects.requireNonNull(key);
+        return switch (key) {
+            case ScriptLoader.ON           -> this.on;
+            case ScriptLoader.ON_PROPERTY  -> this.onProperty;
+            case ScriptLoader.ON_COMMAND   -> this.onCommand;
+            case ScriptLoader.ON_SUGGESTER -> this.onSuggester;
+            case ScriptLoader.DISPATCH     -> this.dispatch;
+            default -> throw new UnsupportedOperationException();
+        };
     }
 
-    @FunctionalInterface
-    @HostAccess.Implementable
-    private interface ScheduledCallback {
+    @Override
+    public ProxyArray getMemberKeys() {
+        return new ProxyArray() {
 
-        Template<ScheduledCallback> TEMPLATE = Jet.function(ScheduledCallback.class, "() => void");
+            @Override
+            public String get(long index) {
+                if (index >= 0 && index < ScriptLoader.KEYS.length)
+                    return ScriptLoader.KEYS[(int) index];
+                throw new ArrayIndexOutOfBoundsException();
+            }
 
-        @HostAccess.Export
-        void run();
+            @Override
+            public void set(long index, @NotNull Value value) {
+                Objects.requireNonNull(value);
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public long getSize() {
+                return ScriptLoader.KEYS.length;
+            }
+        };
+    }
+
+    @Override
+    public boolean hasMember(@NotNull String key) {
+        Objects.requireNonNull(key);
+        for (var candidate : ScriptLoader.KEYS) {
+            if (candidate.equals(key))
+                return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void putMember(@NotNull String key, @NotNull Value value) {
+        Objects.requireNonNull(key);
+        Objects.requireNonNull(value);
+        throw new UnsupportedOperationException();
     }
 }

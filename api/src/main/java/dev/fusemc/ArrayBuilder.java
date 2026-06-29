@@ -17,10 +17,7 @@ public final class ArrayBuilder<T> {
         this.length = 0;
     }
 
-    public static <T> @NotNull ArrayBuilder<T> withAppended(
-            T @NotNull[] content,
-            T value
-    ) {
+    public static <T> @NotNull ArrayBuilder<T> withAppended(T @NotNull[] content, T value) {
         return new ArrayBuilder<T>(content.length + 1)
                 .appendAll(content)
                 .append(value);
