@@ -4,7 +4,10 @@ import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import dev.fusemc.ValueOps;
 import dev.fusemc.standard.ProxyIdentifier;
+import dev.fusemc.standard.ProxyRegistry;
+import dev.fusemc.standard.entity.living.ProxyPlayer;
 import dev.fusemc.tau.Tau;
+import dev.fusemc.tau.Template;
 import dev.fusemc.tau.description.Description;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -21,21 +24,34 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
+import java.util.stream.StreamSupport;
 
 public final class ProxyServer implements ProxyObject {
 
     private static final @NotNull String WORLD    = "world";
+    private static final @NotNull String WORLDS   = "worlds";
+    private static final @NotNull String PLAYER   = "player";
+    private static final @NotNull String PLAYERS  = "players";
     private static final @NotNull String GAMERULE = "gamerule";
+    private static final @NotNull String REGISTRY = "registry";
     private static final @NotNull String @NotNull[] KEYS = {
             ProxyServer.WORLD,
+            ProxyServer.WORLDS,
+            ProxyServer.PLAYER,
+            ProxyServer.PLAYERS,
             ProxyServer.GAMERULE,
+            ProxyServer.REGISTRY,
     };
     private static final Interner<ProxyServer> INTERNER
             = Interners.newWeakInterner();
 
     private final @NotNull MinecraftServer self;
     private final @NotNull ProxyExecutable world;
+    private final @NotNull ProxyExecutable worlds;
+    private final @NotNull ProxyExecutable player;
+    private final @NotNull ProxyExecutable players;
     private final @NotNull ProxyExecutable gamerule;
+    private final @NotNull ProxyExecutable registry;
 
     private ProxyServer(@NonNull MinecraftServer self) {
         this.self = Objects.requireNonNull(self);
@@ -48,6 +64,33 @@ public final class ProxyServer implements ProxyObject {
                     return ProxyWorld.from(level);
                 return Tau.undefined();
             }
+            throw new UnsupportedOperationException();
+        };
+        this.worlds = (args) -> {
+            if (args.length == 0)
+                return StreamSupport.stream(this.self.getAllLevels().spliterator(), false)
+                        .map(ProxyWorld::from)
+                        .toArray(ProxyWorld[]::new);
+            throw new UnsupportedOperationException();
+        };
+        this.player = (args) -> {
+            if (args.length == 1) {
+                var name = Tau.lower(Template.STRING, args[0]);
+                var list = this.self.getPlayerList();
+                for (var candidate : list.getPlayers()) {
+                    var profile = candidate.getGameProfile();
+                    if (profile.name().equals(name))
+                        return ProxyPlayer.from(candidate);
+                }
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.players = (args) -> {
+            if (args.length == 0)
+                return this.self.getPlayerList().getPlayers().stream()
+                        .map(ProxyPlayer::from)
+                        .toArray(ProxyPlayer[]::new);
             throw new UnsupportedOperationException();
         };
         this.gamerule = (args) -> {
@@ -66,6 +109,19 @@ public final class ProxyServer implements ProxyObject {
                             .getGameRules()
                             .get(rule);
                 return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.registry = (args) -> {
+            if (args.length == 1) {
+                var type   = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var key    = ResourceKey.createRegistryKey(type);
+                var registry = this.self.reloadableRegistries()
+                        .lookup()
+                        .lookup(key);
+                return registry.map(ProxyRegistry::from)
+                        .map(wrapped -> (Object) wrapped)
+                        .orElseGet(Tau::undefined);
             }
             throw new UnsupportedOperationException();
         };
@@ -91,7 +147,11 @@ public final class ProxyServer implements ProxyObject {
         Objects.requireNonNull(key);
         return switch (key) {
             case ProxyServer.WORLD    -> this.world;
+            case ProxyServer.WORLDS   -> this.worlds;
+            case ProxyServer.PLAYER   -> this.player;
+            case ProxyServer.PLAYERS  -> this.players;
             case ProxyServer.GAMERULE -> this.gamerule;
+            case ProxyServer.REGISTRY -> this.registry;
             default -> throw new UnsupportedOperationException();
         };
     }
@@ -135,5 +195,9 @@ public final class ProxyServer implements ProxyObject {
         Objects.requireNonNull(key);
         Objects.requireNonNull(value);
         throw new UnsupportedOperationException();
+    }
+
+    public @NotNull MinecraftServer unwrap() {
+        return this.self;
     }
 }

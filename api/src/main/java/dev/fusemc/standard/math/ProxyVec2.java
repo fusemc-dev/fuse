@@ -2,8 +2,10 @@ package dev.fusemc.standard.math;
 
 import dev.fusemc.iota.Standardized;
 import dev.fusemc.tau.Documented;
+import dev.fusemc.tau.Inspectable;
 import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
+import dev.fusemc.tau.description.Description;
 import net.minecraft.world.phys.Vec2;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
@@ -15,28 +17,31 @@ import java.util.Objects;
 
 /// A two-dimensional-vector.
 ///
+/// ---
 /// `ProxyVec2` represents a two-dimensional vector of two `doubles`. It is intended
 /// as a way to expose two-dimensional vectors to scripts.
 ///
 /// A `ProxyVec2` is parsed with the following [Template]:
 ///
-/// ```
-/// Vec2 | [double, double]
+/// ```typescript
+/// type Vec2 = Vec2 | [number, number]
 /// ```
 ///
-/// @since `0.1.0`
+/// @since 0.1.0
 /// @see ProxyVec3
 @Documented("Vec2")
 @Standardized("Vec2")
-public final class ProxyVec2 implements ProxyObject, ProxyIterable {
+public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable {
 
     private static final @NotNull String X                   = "x";
     private static final @NotNull String Y                   = "y";
     private static final @NotNull String ADD                 = "add";
     private static final @NotNull String SUB                 = "sub";
     private static final @NotNull String SCALE               = "scale";
+    private static final @NotNull String CENTER              = "center";
     private static final @NotNull String DISTANCE_TO         = "distanceTo";
     private static final @NotNull String SQUARED_DISTANCE_TO = "squaredDistanceTo";
+    private static final @NotNull String TO_CARTESIAN        = "toCartesian";
     private static final @NotNull String TO_STRING           = "toString";
 
     private static final @NotNull String @NotNull[] KEYS = {
@@ -45,8 +50,10 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
             ProxyVec2.ADD,
             ProxyVec2.SUB,
             ProxyVec2.SCALE,
+            ProxyVec2.CENTER,
             ProxyVec2.DISTANCE_TO,
             ProxyVec2.SQUARED_DISTANCE_TO,
+            ProxyVec2.TO_CARTESIAN,
             ProxyVec2.TO_STRING,
     };
 
@@ -70,8 +77,10 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
     private final @NotNull ProxyExecutable add;
     private final @NotNull ProxyExecutable sub;
     private final @NotNull ProxyExecutable scale;
+    private final @NotNull ProxyExecutable center;
     private final @NotNull ProxyExecutable distanceTo;
     private final @NotNull ProxyExecutable squaredDistanceTo;
+    private final @NotNull ProxyExecutable toCartesian;
 
     public ProxyVec2(double x, double y) {
         this.x = x;
@@ -97,6 +106,11 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
             }
             throw new UnsupportedOperationException();
         };
+        this.center = (args) -> {
+            if (args.length == 0)
+                return new ProxyVec2(Math.floor(this.x) + 0.5, Math.floor(this.y) + 0.5);
+            throw new UnsupportedOperationException();
+        };
         this.squaredDistanceTo = (args) -> {
             if (args.length == 1) {
                 var other = Tau.lower(ProxyVec2.TEMPLATE, args[0]);
@@ -111,11 +125,23 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
             }
             throw new UnsupportedOperationException();
         };
+        // Treat the vector as (θ | φ), in radians.
+        this.toCartesian = (args) -> {
+            if (args.length == 1) {
+                double radius = Tau.lower(Template.DOUBLE, args[0]);
+                return new ProxyVec3(
+                        Math.cos(this.x) * Math.sin(this.y) * radius,
+                        Math.cos(this.y) * radius,
+                        Math.sin(this.x) * Math.sin(this.y) * radius
+                );
+            }
+            throw new UnsupportedOperationException();
+        };
     }
 
     /// Constructs a `ScriptVec2` from the given [Vec2].
     ///
-    /// @since `0.1.0`
+    /// @since 0.1.0
     public static @NotNull ProxyVec2 fromVec2(@NotNull Vec2 vec) {
         Objects.requireNonNull(vec);
         return new ProxyVec2(vec.x, vec.y);
@@ -123,7 +149,7 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
 
     /// Converts the given `ScriptVec2` to a [Vec2].
     ///
-    /// @since `0.1.0`
+    /// @since 0.1.0
     public static @NotNull Vec2 toVec2(@NotNull ProxyVec2 vec) {
         Objects.requireNonNull(vec);
         return new Vec2((float) vec.x, (float) vec.y);
@@ -138,8 +164,10 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
             case ProxyVec2.ADD                 -> this.add;
             case ProxyVec2.SUB                 -> this.sub;
             case ProxyVec2.SCALE               -> this.scale;
+            case ProxyVec2.CENTER              -> this.center;
             case ProxyVec2.DISTANCE_TO         -> this.distanceTo;
             case ProxyVec2.SQUARED_DISTANCE_TO -> this.squaredDistanceTo;
+            case ProxyVec2.TO_CARTESIAN        -> this.toCartesian;
             case ProxyVec2.TO_STRING           -> ProxyVec2.TO_STRING_IMPL;
             default -> throw new UnsupportedOperationException();
         };
@@ -207,5 +235,20 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable {
                 };
             }
         };
+    }
+
+    @Override
+    public @NotNull Description inspect() {
+        return Description.concat(
+                Description.reference(ProxyVec2.class),
+                Description.delimiter(' '),
+                Description.concat(
+                        Description.delimiter('['),
+                        Description.join(Description.delimiter(", "),
+                                Description.numeric(this.x),
+                                Description.numeric(this.y)),
+                        Description.delimiter(']')
+                )
+        );
     }
 }

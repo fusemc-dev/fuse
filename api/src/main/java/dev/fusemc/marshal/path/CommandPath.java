@@ -10,7 +10,10 @@ import dev.fusemc.marshal.path.segment.Segment;
 import dev.fusemc.marshal.standard.ProxySource;
 import dev.fusemc.tau.proxy.ObjectLike;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.Permission;
+import net.minecraft.server.permissions.Permissions;
 import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
 
@@ -19,9 +22,11 @@ import java.util.Objects;
 public final class CommandPath {
 
     private final @NotNull Segment @NotNull [] segments;
+    private final boolean starred;
 
-    CommandPath(@NotNull Segment @NotNull[] segments) {
+    CommandPath(@NotNull Segment @NotNull[] segments, boolean starred) {
         this.segments = Objects.requireNonNull(segments);
+        this.starred  = starred;
     }
 
     @SuppressWarnings("unchecked")
@@ -38,6 +43,8 @@ public final class CommandPath {
                     }
                     return 1;
                 });
+        if (this.starred)
+            builder.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS));
         if (this.segments.length > 1)
             for (var i = this.segments.length - 2; i >= 0; i--) {
                 var segment = this.segments[i];

@@ -2,8 +2,10 @@ package dev.fusemc.standard.math;
 
 import dev.fusemc.iota.Standardized;
 import dev.fusemc.tau.Documented;
+import dev.fusemc.tau.Inspectable;
 import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
+import dev.fusemc.tau.description.Description;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.graalvm.polyglot.HostAccess;
@@ -16,20 +18,21 @@ import java.util.Objects;
 
 /// A three-dimensional-vector.
 ///
+/// ---
 /// `ScriptVec3` represents a three-dimensional vector of three `doubles`. It is intended
 /// as a way to expose three-dimensional vectors to scripts.
 ///
 /// A `ScriptVec3` is parsed with the following [Template]:
 ///
-/// ```
-/// Vec3 | [double, double, double]
+/// ```typescript
+/// type Vec3 = Vec3 | [number, number, number]
 /// ```
 ///
-/// @since `0.1.0`
+/// @since 0.1.0
 /// @see ProxyVec2
 @Documented("Vec3")
 @Standardized("Vec3")
-public final class ProxyVec3 implements ProxyObject, ProxyIterable {
+public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable {
 
     public static final @NotNull ProxyVec3 ZERO = new ProxyVec3(0, 0, 0);
 
@@ -39,6 +42,7 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
     private static final @NotNull String ADD = "add";
     private static final @NotNull String SUB = "sub";
     private static final @NotNull String SCALE = "scale";
+    private static final @NotNull String CENTER = "center";
     private static final @NotNull String DISTANCE_TO = "distanceTo";
     private static final @NotNull String SQUARED_DISTANCE_TO = "squaredDistanceTo";
     private static final @NotNull String TO_STRING = "toString";
@@ -49,6 +53,7 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
             ProxyVec3.ADD,
             ProxyVec3.SUB,
             ProxyVec3.SCALE,
+            ProxyVec3.CENTER,
             ProxyVec3.DISTANCE_TO,
             ProxyVec3.SQUARED_DISTANCE_TO,
             ProxyVec3.TO_STRING,
@@ -70,6 +75,7 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
     private final @NotNull ProxyExecutable add;
     private final @NotNull ProxyExecutable sub;
     private final @NotNull ProxyExecutable scale;
+    private final @NotNull ProxyExecutable center;
     private final @NotNull ProxyExecutable distanceTo;
     private final @NotNull ProxyExecutable squaredDistanceTo;
     private final @NotNull ProxyExecutable toString;
@@ -97,6 +103,11 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
                 double factor = Tau.lower(Template.DOUBLE, args[0]);
                 return new ProxyVec3(this.x * factor, this.y * factor, this.z * factor);
             }
+            throw new UnsupportedOperationException();
+        };
+        this.center = (args) -> {
+            if (args.length == 0)
+                return new ProxyVec3(Math.floor(this.x) + 0.5, Math.floor(this.y) + 0.5, Math.floor(this.z) + 0.5);
             throw new UnsupportedOperationException();
         };
         this.distanceTo = (args) -> {
@@ -148,6 +159,7 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
             case ProxyVec3.ADD                 -> this.add;
             case ProxyVec3.SUB                 -> this.sub;
             case ProxyVec3.SCALE               -> this.scale;
+            case ProxyVec3.CENTER              -> this.center;
             case ProxyVec3.DISTANCE_TO         -> this.distanceTo;
             case ProxyVec3.SQUARED_DISTANCE_TO -> this.squaredDistanceTo;
             case ProxyVec3.TO_STRING           -> this.toString;
@@ -223,5 +235,21 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable {
                 return this.position < 3;
             }
         };
+    }
+
+    @Override
+    public @NotNull Description inspect() {
+        return Description.concat(
+                Description.reference(ProxyVec3.class),
+                Description.delimiter(' '),
+                Description.concat(
+                        Description.delimiter('['),
+                        Description.join(Description.delimiter(", "),
+                                Description.numeric(this.x),
+                                Description.numeric(this.y),
+                                Description.numeric(this.z)),
+                        Description.delimiter(']')
+                )
+        );
     }
 }

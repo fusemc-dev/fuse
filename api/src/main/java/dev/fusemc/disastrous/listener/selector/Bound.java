@@ -2,7 +2,8 @@ package dev.fusemc.disastrous.listener.selector;
 
 
 import dev.fusemc.disastrous.Callback;
-import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.disastrous.Disaster;
+import dev.fusemc.disastrous.Type;
 import dev.fusemc.disastrous.guard.Guard;
 import dev.fusemc.disastrous.listener.Listener;
 import dev.fusemc.tau.Tau;
@@ -15,10 +16,10 @@ import java.util.stream.Collectors;
 
 public final class Bound<E extends Disaster<T>, T extends Callback> implements Selector {
 
-    private final @NotNull Disaster.Type<T> type;
+    private final @NotNull Type<T> type;
     private final @NotNull Guard<? super E> @NotNull[] guards;
 
-    public Bound(@NotNull Disaster.Type<T> type,
+    public Bound(@NotNull Type<T> type,
                  @NotNull Guard<? super E> @NotNull[] guards) {
         this.type   = Objects.requireNonNull(type);
         this.guards = Objects.requireNonNull(guards);
@@ -29,7 +30,7 @@ public final class Bound<E extends Disaster<T>, T extends Callback> implements S
         return new Listener<>(Tau.lower(this.type.template(), callback), this.guards);
     }
 
-    public @NotNull Disaster.Type<T> type() {
+    public @NotNull Type<T> type() {
         return this.type;
     }
 

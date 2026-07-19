@@ -1,7 +1,8 @@
 package dev.fusemc.disastrous.listener.selector;
 
 import dev.fusemc.disastrous.Callback;
-import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.disastrous.Disaster;
+import dev.fusemc.disastrous.Type;
 import dev.fusemc.disastrous.guard.Guard;
 import dev.fusemc.standard.ProxyIdentifier;
 import org.jetbrains.annotations.NotNull;
@@ -15,7 +16,7 @@ public sealed interface Selector permits Bound, Unbound {
         return new Unbound(identifier);
     }
 
-    static <E extends Disaster<T>, T extends Callback> @NotNull Selector bound(@NotNull Disaster.Type<T> type,
+    static <E extends Disaster<T>, T extends Callback> @NotNull Selector bound(@NotNull Type<T> type,
                                                                                @NotNull Guard<? super E> @NotNull[] guards) {
         Objects.requireNonNull(type);
         Objects.requireNonNull(guards);

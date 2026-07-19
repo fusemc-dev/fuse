@@ -38,8 +38,8 @@ public final class ArrayBuilder<T> {
     }
 
     public T @NotNull[] build(@NotNull IntFunction<T @NotNull[]> constructor) {
-        var result = Objects.requireNonNull(constructor)
-                .apply(this.length);
+        Objects.requireNonNull(constructor);
+        var result = constructor.apply(this.length);
         System.arraycopy(this.buffer, 0, result, 0, this.length);
         return result;
     }

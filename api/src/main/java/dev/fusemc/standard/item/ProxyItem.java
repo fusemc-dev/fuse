@@ -8,13 +8,11 @@ import dev.fusemc.tau.Documented;
 import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
 import dev.fusemc.tau.description.Description;
-import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyArray;
@@ -55,7 +53,7 @@ public final class ProxyItem implements ProxyObject {
 
     public static final @NotNull Template<ProxyItem> TEMPLATE = Template.union(
             Template.record(
-                    ValueOps.holder(BuiltInRegistries.ITEM).property("type", item -> item.self.getItemHolder()),
+                    ValueOps.registered(BuiltInRegistries.ITEM).property("type", item -> item.self.getItemHolder()),
                     Template.INTEGER.property("count", item -> item.self.getCount()),
                     ValueOps.delegate(DataComponentPatch.CODEC, Description.ELLIPSIS)
                             .<ProxyItem>property("components", item -> item.self.getComponentsPatch())
@@ -106,7 +104,7 @@ public final class ProxyItem implements ProxyObject {
                     @SuppressWarnings("unchecked")
                     var codec  = (Codec<Object>) component.codecOrThrow();
                     var value  = (Object) this.self.get(component);
-                    return codec.encodeStart(ValueOps.instance(), value)
+                    return codec.encodeStart(ValueOps.INSTANCE, value)
                             .resultOrPartial()
                             .orElseGet(Tau::undefined);
                 }
@@ -121,7 +119,7 @@ public final class ProxyItem implements ProxyObject {
                 var component  = (DataComponentType<Object>) BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(identifier);
                 if (component != null) {
                     var codec  = component.codecOrThrow();
-                    var result = codec.parse(ValueOps.instance(), args[1])
+                    var result = codec.parse(ValueOps.INSTANCE, args[1])
                             .resultOrPartial();
                     //noinspection OptionalIsPresent
                     if (result.isPresent()) {
@@ -164,11 +162,6 @@ public final class ProxyItem implements ProxyObject {
     public static @NotNull ProxyItem from(@NotNull ItemStack stack) {
         Objects.requireNonNull(stack);
         return new ProxyItem(stack);
-    }
-
-    public static @NotNull ItemStack to(@NotNull ProxyItem item) {
-        Objects.requireNonNull(item);
-        return item.self;
     }
 
     @Override
@@ -228,5 +221,9 @@ public final class ProxyItem implements ProxyObject {
         Objects.requireNonNull(key);
         Objects.requireNonNull(value);
         throw new UnsupportedOperationException();
+    }
+
+    public @NotNull ItemStack unwrap() {
+        return this.self;
     }
 }

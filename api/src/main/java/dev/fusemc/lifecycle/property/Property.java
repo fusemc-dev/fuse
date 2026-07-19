@@ -69,6 +69,8 @@ public final class Property implements ProxyObject, ProxyExecutable {
     public Object getMember(String key) {
         return switch (key) {
             case Property.NAME      -> this.identifier;
+            case Property.GET       -> this.get;
+            case Property.SET       -> this.set;
             case Property.TO_STRING -> this.toString;
             default -> throw new NoSuchElementException();
         };
@@ -128,13 +130,13 @@ public final class Property implements ProxyObject, ProxyExecutable {
         return this.value;
     }
 
-    public @NotNull Property rehydrate(@NotNull Property other) {
+    public @NotNull Property assign(@NotNull Property other) {
         Objects.requireNonNull(other);
         this.value = other.value;
         return this;
     }
 
-    public @NotNull Property unbind() {
+    public @NotNull Property unbound() {
         return new Property(this.identifier, Iota.unbind(this.value));
     }
 

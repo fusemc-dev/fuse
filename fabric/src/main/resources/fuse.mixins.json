@@ -7,6 +7,7 @@
         "ServerLevelMixin",
         "client.IntegratedServerMixin",
         "server.DedicatedServerMixin",
+        "server.ServerGamePacketListenerImplMixin",
         "server.ServerPlayerGameModeMixin"
     ],
     "injectors": {

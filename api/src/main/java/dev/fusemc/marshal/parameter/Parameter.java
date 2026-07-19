@@ -186,7 +186,7 @@ public interface Parameter<T> {
         }
 
         @Override
-        public @NonNull ProxyEntity<?>[] resolve(@NotNull CommandContext<CommandSourceStack> context, @NotNull String name) throws CommandSyntaxException {
+        public @NonNull ProxyEntity<?> @NonNull [] resolve(@NotNull CommandContext<CommandSourceStack> context, @NotNull String name) throws CommandSyntaxException {
             var selector = context.getArgument(name, EntitySelector.class);
             var source   = context.getSource();
             return selector.findEntities(source)
@@ -204,7 +204,7 @@ public interface Parameter<T> {
 
         @Override
         public @NonNull Value resolve(@NotNull CommandContext<CommandSourceStack> context, @NotNull String name) {
-            return NbtOps.INSTANCE.convertTo(ValueOps.instance(), NbtTagArgument.getNbtTag(context, name));
+            return NbtOps.INSTANCE.convertTo(ValueOps.INSTANCE, NbtTagArgument.getNbtTag(context, name));
         }
     };
 

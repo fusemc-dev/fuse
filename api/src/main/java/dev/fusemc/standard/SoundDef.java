@@ -1,6 +1,7 @@
 package dev.fusemc.standard;
 
 import dev.fusemc.ValueOps;
+import dev.fusemc.tau.Documented;
 import dev.fusemc.tau.Template;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -10,32 +11,45 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
 
-/// player.playSound({
-///     type: "item.flint_and_steel.use",
-///     category: "player",
-///     playback: {
-///         volume: 5,
-///         pitch: 2
+/// A definition of a sound occurrence.
+///
+/// ---
+/// An **entity definition** groups together the information needed to spawn an entity.
+/// It is intended to be constructed from **JS**, to reduce the arity of a function.
+///
+/// A `SoundDef` is parsed with the following [Template]:
+///
+/// ```typescript
+/// type SoundDef = {
+///     type: Registered<"minecraft:sound_event">,
+///     category: "master" | ... | "ambient",
+///     playback?: {
+///         volume?: number,
+///         pitch?: number
 ///     }
-/// });
-public record ProxySound(@NotNull SoundEvent event,
-                         @NotNull SoundSource category,
-                         @NotNull Playback playback) {
+/// };
+/// ```
+///
+/// @since 0.1.0
+@Documented("SoundDefinition")
+public record SoundDef(@NotNull SoundEvent event,
+                       @NotNull SoundSource category,
+                       @NotNull Playback playback) {
 
-    public static final @NotNull Template<ProxySound> TEMPLATE = Template.record(
-            ValueOps.holder(BuiltInRegistries.SOUND_EVENT)
+    public static final @NotNull Template<SoundDef> TEMPLATE = Template.record(
+            ValueOps.registered(BuiltInRegistries.SOUND_EVENT)
                     .map(Holder::value, Holder::direct)
                     .property("type", sound -> sound.event),
             Template.enumerate(SoundSource.class, SoundSource::getName)
                     .property("category", sound -> sound.category),
-            Playback.TEMPLATE.<ProxySound>property("playback", sound -> sound.playback)
+            Playback.TEMPLATE.<SoundDef>property("playback", sound -> sound.playback)
                     .optional(() -> Playback.DEFAULT),
-            ProxySound::new
+            SoundDef::new
     );
 
-    public ProxySound(@NotNull SoundEvent event,
-                      @NotNull SoundSource category,
-                      @NotNull Playback playback) {
+    public SoundDef(@NotNull SoundEvent event,
+                    @NotNull SoundSource category,
+                    @NotNull Playback playback) {
         this.event    = Objects.requireNonNull(event);
         this.category = Objects.requireNonNull(category);
         this.playback = Objects.requireNonNull(playback);

@@ -14,35 +14,29 @@ import dev.fusemc.tau.proxy.ObjectLike;
 import dev.fusemc.tau.template.Mu;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleType;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.ReloadableServerRegistries;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.gamerules.GameRule;
-import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
-import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyArray;
+import org.graalvm.polyglot.proxy.ProxyHashMap;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
 public final class ValueOps implements DynamicOps<Value> {
 
-    private static final @NotNull ValueOps INSTANCE                   = new ValueOps();
-    private static final @NotNull Template<Value[]> ARRAY             = Template.array(Template.ANY, Value[]::new);
+    private static final @NotNull Template<Value[]> ARRAY = Template.array(Template.ANY, Value[]::new);
     private static final @NotNull Template<Map<String, Value>> OBJECT = Template.map(Template.STRING, Template.ANY);
 
+    public static final @NotNull ValueOps INSTANCE = new ValueOps();
     public static final @NotNull Template<Component> COMPONENT = ValueOps.delegate(ComponentSerialization.CODEC, Description.keyword("Text"));
 
     private ValueOps() {
@@ -54,26 +48,34 @@ public final class ValueOps implements DynamicOps<Value> {
         return ValueOps.INSTANCE;
     }
 
-    public static <T> @NotNull Template<Holder<T>> holder(@NotNull Registry<T> registry) {
+    /// Constructs a [Template] for an entry of the provided [Registry].
+    ///
+    /// ---
+    ///
+    /// The returned [Template] will describe itself as follows, where `κ` denotes the [ResourceKey] of the provided [Registry]:
+    ///
+    /// ```
+    /// Registered<"κ">
+    /// ```
+    ///
+    /// @since 0.1.0
+    public static <T> @NotNull Template<Holder<T>> registered(@NotNull Registry<T> registry) {
         Objects.requireNonNull(registry);
         return new Template<>() {
 
             @Override
             public @NonNull Option<Holder<T>> lower(@NonNull Value value) {
                 return ProxyIdentifier.MAPPED_TEMPLATE.lower(value)
-                        .flatMap(i -> registry.get(i)
-                                .map(Option::some)
-                                .orElseGet(Option::none))
-                        .map(h -> h);
+                        .flatMap(i -> Option.fromOptional(registry.get(i)))
+                        .map(it -> it);
             }
 
             @Override
             public @NonNull Option<Value> raise(@Nullable Holder<T> value) {
                 if (value != null)
-                    return value.unwrapKey()
+                    return Option.fromOptional(value.unwrapKey())
                             .map(key -> key.identifier().toString())
-                            .map(Template.STRING::raise)
-                            .orElseGet(Option::none);
+                            .flatMap(Template.STRING::raise);
                 return Option.none();
             }
 
@@ -81,10 +83,14 @@ public final class ValueOps implements DynamicOps<Value> {
             public @NotNull Description describe(@NotNull Scope<@NotNull Mu<?>> points) {
                 return Description.attach(
                         Description.concat(
-                                Description.delimiter('#'),
-                                Description.keyword(registry.key()
-                                        .identifier()
-                                        .toString())
+                                Description.reference("Registered"),
+                                Description.concat(
+                                        Description.delimiter('<'),
+                                        Description.literal(registry.key()
+                                                .identifier()
+                                                .toString()),
+                                        Description.delimiter('>')
+                                )
                         ),
                         Domain.DESCRIBE
                 );
@@ -100,12 +106,12 @@ public final class ValueOps implements DynamicOps<Value> {
 
             @Override
             public @NotNull Option<T> lower(@NotNull Value value) {
-                return Option.fromOptional(codec.parse(ValueOps.instance(), value).resultOrPartial());
+                return Option.fromOptional(codec.parse(ValueOps.INSTANCE, value).resultOrPartial());
             }
 
             @Override
             public @NotNull Option<@NotNull Value> raise(@Nullable T value) {
-                return Option.fromOptional(codec.encodeStart(ValueOps.instance(), value).resultOrPartial());
+                return Option.fromOptional(codec.encodeStart(ValueOps.INSTANCE, value).resultOrPartial());
             }
 
             @Override
@@ -137,10 +143,35 @@ public final class ValueOps implements DynamicOps<Value> {
             return ops.createBoolean(value.asBoolean());
         if (value.isString())
             return ops.createString(value.asString());
-        if (value.hasArrayElements() || value.isHostObject() && value.asHostObject() instanceof Value[])
+        if (value.hasArrayElements())
             return this.convertList(ops, value);
-        if (value.hasMembers() && !value.hasArrayElements() || value.isHostObject() && value.asHostObject() instanceof Map<?, ?>)
+        if (value.hasMembers() && !value.hasArrayElements())
             return this.convertMap(ops, value);
+        if (value.isHostObject()) {
+            var host = value.asHostObject();
+            if (host instanceof byte[]
+                    || host instanceof short[]
+                    || host instanceof int[]
+                    || host instanceof long[]
+                    || host instanceof float[]
+                    || host instanceof double[]
+                    || host instanceof char[]
+                    || host instanceof boolean[]
+                    || host instanceof Object[]
+                    || host instanceof Collection<?>)
+                return this.convertList(ops, value);
+            if (host instanceof Map<?,?>)
+                return this.convertMap(ops, value);
+            return ops.empty();
+        }
+        if (value.isProxyObject()) {
+            var proxy = value.asProxyObject();
+            if (proxy instanceof ProxyArray)
+                return this.convertList(ops, value);
+            if (proxy instanceof ProxyObject || proxy instanceof ProxyHashMap)
+                return this.convertMap(ops, value);
+            return ops.empty();
+        }
         return ops.empty();
     }
 

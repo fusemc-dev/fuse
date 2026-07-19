@@ -1,8 +1,10 @@
 package dev.fusemc.mixin.server;
 
+import dev.fusemc.disastrous.disaster.standard.Load;
 import dev.fusemc.iota.Iota;
-import dev.fusemc.lifecycle.ScriptLoader;
+import dev.fusemc.lifecycle.Entrypoint;
 import dev.fusemc.lifecycle.property.Property;
+import dev.fusemc.standard.server.ProxyServer;
 import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
 import net.minecraft.server.dedicated.DedicatedServer;
@@ -21,16 +23,17 @@ import java.nio.file.Files;
 public abstract class DedicatedServerMixin {
 
     @Unique
-    private static final Logger LOGGER = LoggerFactory.getLogger(DedicatedServerMixin.class);
+    @SuppressWarnings("LoggerInitializedWithForeignClass")
+    private static final Logger LOGGER = LoggerFactory.getLogger(Entrypoint.class);
 
-    @Inject(method = "initServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/dedicated/DedicatedServerSettings;getProperties()Lnet/minecraft/server/dedicated/DedicatedServerProperties;"))
-    public void onInitServer(CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "initServer", at = @At(value = "HEAD"))
+    public void onInitProperties(CallbackInfoReturnable<Boolean> cir) {
         var self = (DedicatedServer) (Object) this;
         var properties = self.getFile("./properties.iota");
-        var script = ScriptLoader.instance();
+        var script = Entrypoint.instance();
         if (Files.exists(properties)) {
             try {
-                var result = Iota.unmarshal(ScriptLoader.IOTA, properties);
+                var result = Iota.unmarshal(Entrypoint.IOTA, properties);
                 script.rehydrate(Tau.lower(
                         Template.array(Property.TEMPLATE, Property[]::new),
                         result
@@ -39,10 +42,16 @@ public abstract class DedicatedServerMixin {
             } catch (IOException e) {
                 LOGGER.error("Failed to load properties.iota", e);
             }
-            script.refreshTree(self);
             return;
         }
         LOGGER.info("Could not locate properties.iota on disk... Welcome to fuse!");
+    }
+
+    @Inject(method = "initServer", at = @At("TAIL"))
+    public void onInitServer(CallbackInfoReturnable<Boolean> cir) {
+        var self   = (DedicatedServer) (Object) this;
+        var script = Entrypoint.instance();
         script.refreshTree(self);
+        script.dispatch(new Load(ProxyServer.from(self)));
     }
 }

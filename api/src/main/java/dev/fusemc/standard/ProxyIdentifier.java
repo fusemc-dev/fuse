@@ -6,6 +6,7 @@ import dev.fusemc.quelle.Diagnostic;
 import dev.fusemc.quelle.StringReader;
 import dev.fusemc.quelle.position.CharPosition;
 import dev.fusemc.tau.Documented;
+import dev.fusemc.tau.Inspectable;
 import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
 import dev.fusemc.tau.description.Description;
@@ -19,15 +20,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-/// A namespaced identifier.
+/// A namespaced name.
 ///
-/// `ProxyIdentifier` represents a namespaced identifier in form of `namespace:path/...`. It is
+/// `ProxyIdentifier` represents a namespaced name in form of `namespace:path/...`. It is
 /// intended as a **script-facing** version of [Identifier].
 ///
 /// It appears iterable to scripts, allowing, among other, for destructuring:
 ///
 /// ```js
-/// const [namespace, path] = identifier;
+/// const [namespace, path] = name;
 /// ```
 ///
 /// A `ProxyIdentifier` is parsed with the following [Template]:
@@ -36,10 +37,10 @@ import java.util.Objects;
 /// Identifier | /namespace:path/
 /// ```
 ///
-/// @since `0.1.0`
+/// @since 0.1.0
 @Documented("Identifier")
 @Standardized("Identifier")
-public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
+public final class ProxyIdentifier implements ProxyObject, ProxyIterable, Inspectable {
 
     private static final @NotNull String NAMESPACE = "namespace";
     private static final @NotNull String PATH      = "path";
@@ -96,7 +97,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
 
     /// Constructs a `ProxyIdentifier` from the given [Identifier].
     ///
-    /// @since `0.1.0`
+    /// @since 0.1.0
     public static @NotNull ProxyIdentifier from(@NotNull Identifier identifier) {
         Objects.requireNonNull(identifier);
         return new ProxyIdentifier(
@@ -107,7 +108,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
 
     /// Converts the given `ProxyIdentifier` to an [Identifier].
     ///
-    /// @since `0.1.0`
+    /// @since 0.1.0
     public static @NotNull Identifier to(@NotNull ProxyIdentifier identifier) {
         Objects.requireNonNull(identifier);
         return Identifier.fromNamespaceAndPath(
@@ -174,7 +175,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
                     length = 0;
                     continue;
                 }
-                throw new Diagnostic("Encountered an empty segment in an identifier literal.", reader.pointRange());
+                throw new Diagnostic("Encountered an empty segment in an name literal.", reader.pointRange());
             }
             if (ProxyIdentifier.isPart(c)) {
                 buffer.appendCodePoint(reader.read());
@@ -185,7 +186,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
         }
         if (length > 0)
             return new ProxyIdentifier(namespace, buffer.toString());
-        throw new Diagnostic("Encountered a trailing slash in an identifier literal.", reader.range(position));
+        throw new Diagnostic("Encountered a trailing slash in an name literal.", reader.range(position));
     }
 
     @Override
@@ -279,5 +280,21 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable {
     @Override
     public @NotNull String toString() {
         return String.format("%s:%s", namespace, path);
+    }
+
+    @Override
+    public @NotNull Description inspect() {
+        return Description.concat(
+                Description.reference(ProxyIdentifier.class),
+                Description.concat(
+                        Description.delimiter('('),
+                        Description.concat(
+                                Description.delimiter(this.namespace),
+                                Description.delimiter(':'),
+                                Description.delimiter(this.path)
+                        ),
+                        Description.delimiter(')')
+                )
+        );
     }
 }

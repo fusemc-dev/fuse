@@ -14,7 +14,7 @@ public final class HandGuard implements Guard<WithHand<?>> {
     private static final @NotNull HandGuard MAIN = new HandGuard(InteractionHand.MAIN_HAND);
     private static final @NotNull HandGuard OFF  = new HandGuard(InteractionHand.OFF_HAND);
 
-    public static final @NotNull Guard.Type<HandGuard> TYPE = (reader) -> {
+    public static final @NotNull Guard.Parser<HandGuard> PARSER = (reader) -> {
         var position   = reader.position();
         var identifier = reader.readIdentifier((c) -> c >= 'a' && c <= 'z');
         return switch (identifier) {

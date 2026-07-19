@@ -2,7 +2,7 @@ package dev.fusemc.disastrous.listener;
 
 import com.manchickas.optionated.Option;
 import dev.fusemc.disastrous.Disastrous;
-import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.disastrous.Type;
 import dev.fusemc.disastrous.guard.Guard;
 import dev.fusemc.disastrous.listener.selector.Selector;
 import dev.fusemc.quelle.Diagnostic;
@@ -39,14 +39,14 @@ public final class Parser extends StringReader<String> {
                 throw new Diagnostic("Encountered trailing data in a selector expression.", this.pointRange());
             return selector;
         }
-        throw Parser.incomplete(this.range(position));
+        throw dev.fusemc.disastrous.listener.Parser.incomplete(this.range(position));
     }
 
-    public @NotNull Disaster.Type<?> parseType() {
+    public @NotNull Type<?> parseType() {
         var position   = this.position();
         var identifier = ProxyIdentifier.readIdentifier(this);
         var option     = Disastrous.dispatch(identifier);
-        if (option instanceof Option.Some<Disaster.Type<?>>(var type)) {
+        if (option instanceof Option.Some(var type)) {
             assert type != null;
             return type;
         }
@@ -71,12 +71,12 @@ public final class Parser extends StringReader<String> {
                         var position   = this.position();
                         var identifier = this.readIdentifier(c -> c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c == '-');
                         var option     = type.dispatch(identifier);
-                        if (option instanceof Option.Some<Guard.Type<?>>(var gt)) {
-                            assert gt != null;
+                        if (option instanceof Option.Some<Guard.Parser<?>>(var parser)) {
+                            assert parser != null;
                             if (this.skipWhitespace()) {
                                 if (this.isAt('(')) {
                                     this.read();
-                                    var guard = gt.parse(this);
+                                    var guard = parser.parse(this);
                                     if (this.skipWhitespace()) {
                                         if (this.isAt(')')) {
                                             this.read();

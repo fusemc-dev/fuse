@@ -2,17 +2,26 @@ package dev.fusemc.syringe;
 
 import com.mojang.serialization.Lifecycle;
 import dev.fusemc.ValueOps;
-import dev.fusemc.standard.entity.living.ProxyPlayer;
+import dev.fusemc.standard.entity.ProxyEntity;
+import dev.fusemc.standard.item.ProxyItem;
 import dev.fusemc.standard.math.ProxyVec2;
 import dev.fusemc.standard.math.ProxyVec3;
+import dev.fusemc.tau.Tau;
 import dev.fusemc.tau.Template;
+import dev.fusemc.tau.description.Description;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TraceableEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.component.CustomData;
+import org.graalvm.polyglot.Value;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.invoke.MethodHandles;
@@ -182,6 +191,20 @@ public abstract class Syringe {
                     .withTemplate(Template.STRING)
                     .build()
     );
+    public static final @NotNull Vaccine<Entity, Value> DATA = Syringe.register(
+            "data", Entity.class,
+            builder -> builder
+                    .onSample(entity -> {
+                        var compound = entity.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+                        return NbtOps.INSTANCE.convertTo(ValueOps.INSTANCE, compound.copyTag());
+                    })
+                    .onInject((entity, data) -> {
+                        var compound = Tau.lower(ValueOps.delegate(CustomData.CODEC, Description.ELLIPSIS), data);
+                        entity.setComponent(DataComponents.CUSTOM_DATA, compound);
+                    })
+                    .withTemplate(Template.ANY)
+                    .build()
+    );
 
     // LivingEntity
     public static final @NotNull Vaccine<LivingEntity, Float> ABSORPTION = Syringe.register(
@@ -193,13 +216,23 @@ public abstract class Syringe {
                     .build()
     );
 
+    // Type Specific
+    public static final @NotNull Vaccine<ItemEntity, ProxyItem> ITEM = Syringe.register(
+            "item", ItemEntity.class,
+            builder -> builder
+                    .onSample(entity -> ProxyItem.from(entity.getItem()))
+                    .onInject((entity, item) -> entity.setItem(item.unwrap()))
+                    .withTemplate(ProxyItem.TEMPLATE)
+                    .build()
+    );
+
     private Syringe() {
         throw new UnsupportedOperationException();
     }
 
-    private static @NotNull <E extends Entity, T> Vaccine<E, T> register(@NotNull String identifier,
-                                                                         @NotNull Class<E> type,
-                                                                         @NotNull Function<Vaccine.Builder<E, T>, Vaccine<E, T>> builder) {
+    private static @NotNull <T, V> Vaccine<T, V> register(@NotNull String identifier,
+                                                          @NotNull Class<T> type,
+                                                          @NotNull Function<Vaccine.Builder<T, V>, Vaccine<T, V>> builder) {
         Objects.requireNonNull(identifier);
         Objects.requireNonNull(type);
         Objects.requireNonNull(builder);
@@ -210,7 +243,7 @@ public abstract class Syringe {
         );
     }
 
-    private static @NotNull VarHandle lookupHandle(@NotNull Class<? extends Entity> clazz,
+    private static @NotNull VarHandle lookupHandle(@NotNull Class<?> clazz,
                                                    @NotNull String name,
                                                    @NotNull Class<?> type) {
         Objects.requireNonNull(clazz);

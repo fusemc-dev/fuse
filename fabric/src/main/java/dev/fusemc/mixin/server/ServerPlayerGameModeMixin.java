@@ -4,7 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.fusemc.disastrous.disaster.standard.interact.BlockInteract;
-import dev.fusemc.lifecycle.ScriptLoader;
+import dev.fusemc.lifecycle.Entrypoint;
 import dev.fusemc.standard.ProxyHand;
 import dev.fusemc.disastrous.disaster.standard.interact.ItemInteract;
 import dev.fusemc.standard.block.ProxyBlock;
@@ -33,30 +33,24 @@ public abstract class ServerPlayerGameModeMixin {
                                      @NotNull Player player,
                                      @NotNull InteractionHand interactionHand,
                                      @NotNull Operation<InteractionResult> original) {
-        var script = ScriptLoader.instance();
+        var script = Entrypoint.instance();
         var event  = script.dispatch(new ItemInteract(
                 ProxyPlayer.from((ServerPlayer) player),
                 ProxyItem.from(instance),
                 ProxyHand.from(interactionHand)
         ));
-        var result = event.result();
-        if (result == InteractionResult.PASS)
-            return original.call(instance, level, player, interactionHand);
-        return result;
+        return event.resultOr(() -> original.call(instance, level, player, interactionHand));
     }
 
     @WrapOperation(method = "useItemOn", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/state/BlockState;useWithoutItem(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"))
     InteractionResult onInteractOn(BlockState instance, Level level, Player player, BlockHitResult blockHitResult, Operation<InteractionResult> original, @Local(argsOnly = true) InteractionHand hand) {
-        var script = ScriptLoader.instance();
+        var script = Entrypoint.instance();
         var event  = script.dispatch(new BlockInteract(
                 ProxyPlayer.from((ServerPlayer) player),
                 ProxyBlock.from(instance),
                 ProxyVec3.from(blockHitResult.getBlockPos()),
                 ProxyHand.from(hand)
         ));
-        var result = event.result();
-        if (result == InteractionResult.PASS)
-            return original.call(instance, level, player, blockHitResult);
-        return result;
+        return event.resultOr(() -> original.call(instance, level, player, blockHitResult));
     }
 }

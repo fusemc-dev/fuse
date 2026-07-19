@@ -1,7 +1,7 @@
 package dev.fusemc.disastrous.listener;
 
 import dev.fusemc.disastrous.Callback;
-import dev.fusemc.disastrous.disaster.Disaster;
+import dev.fusemc.disastrous.Disaster;
 import dev.fusemc.disastrous.guard.Guard;
 import org.jetbrains.annotations.NotNull;
 
@@ -18,12 +18,12 @@ public final class Listener<E extends Disaster<T>, T extends Callback> {
         this.guards   = Objects.requireNonNull(guards);
     }
 
-    public boolean onEvent(@NotNull E event) {
+    public boolean onDisaster(@NotNull E disaster) {
         for (var guard : this.guards) {
-            if (guard.satisfies(event))
+            if (guard.satisfies(disaster))
                 continue;
             return true;
         }
-        return event.onDispatch(this.callback);
+        return disaster.dispatch(this.callback);
     }
 }

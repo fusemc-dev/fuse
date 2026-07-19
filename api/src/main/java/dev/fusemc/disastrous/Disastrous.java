@@ -2,11 +2,11 @@ package dev.fusemc.disastrous;
 
 import com.manchickas.optionated.Option;
 import com.mojang.serialization.Lifecycle;
-import dev.fusemc.disastrous.disaster.Disaster;
 import dev.fusemc.disastrous.guard.Guard;
 import dev.fusemc.disastrous.guard.type.HandGuard;
-import dev.fusemc.disastrous.listener.selector.Selector;
+import dev.fusemc.disastrous.guard.type.PeriodicGuard;
 import dev.fusemc.disastrous.listener.Parser;
+import dev.fusemc.disastrous.listener.selector.Selector;
 import dev.fusemc.standard.ProxyIdentifier;
 import dev.fusemc.tau.Template;
 import net.minecraft.core.MappedRegistry;
@@ -16,88 +16,47 @@ import net.minecraft.resources.ResourceKey;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 /// ![banner](./banner.png)
-/// # Disastrous
 ///
-/// **Disastrous** is a component of [Fuse](https://fusemc.dev). Disastrous is
-/// an original take on an **event system**, designed around an event _owning the
+/// ---
+///
+/// Disastrous is an original take on an **event system**, designed around an event _owning the
 /// signature of its [Callback]_ and _its dispatch_.
 public final class Disastrous {
 
-    public static final @NotNull Registry<Disaster.Type<?>> REGISTRY = new MappedRegistry<>(
+    public static final @NotNull Registry<Type<?>> REGISTRY = new MappedRegistry<>(
             ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath("fuse", "disaster")),
             Lifecycle.stable()
     );
 
-    public static final Disaster.Type<Callback.Join> JOIN = Disastrous.register("join", new Disaster.Type<>() {
-
-        @Override
-        public @NotNull Template<Callback.Join> template() {
-            return Callback.Join.TEMPLATE;
-        }
-
-        @Override
-        public @NotNull Option<Guard.Type<?>> dispatch(@NotNull String name) {
-            return Option.none();
-        }
+    public static final Type<Callback.Join> JOIN = Disastrous.register("join", Callback.Join.TEMPLATE);
+    public static final Type<Callback.Load> LOAD = Disastrous.register("load", Callback.Load.TEMPLATE);
+    public static final Type<Callback.Unload> UNLOAD = Disastrous.register("unload", Callback.Unload.TEMPLATE);
+    public static final Type<Callback.ServerTick> SERVER_TICK = Disastrous.register("tick/server", Callback.ServerTick.TEMPLATE, name -> switch (name) {
+        case "periodically" -> Option.some(PeriodicGuard.PARSER);
+        default             -> Option.none();
     });
-    public static final Disaster.Type<Callback.Tick> TICK = Disastrous.register("tick", new Disaster.Type<>() {
-
-        @Override
-        public @NotNull Template<Callback.Tick> template() {
-            return Callback.Tick.TEMPLATE;
-        }
-
-        @Override
-        public @NotNull Option<Guard.Type<?>> dispatch(@NotNull String name) {
-            return Option.none();
-        }
+    public static final Type<Callback.WorldTick> WORLD_TICK = Disastrous.register("tick/world", Callback.WorldTick.TEMPLATE, name -> switch (name) {
+        case "periodically" -> Option.some(PeriodicGuard.PARSER);
+        default             -> Option.none();
     });
-    public static final Disaster.Type<Callback.ItemInteract> ITEM_INTERACT = Disastrous.register("interact/item", new Disaster.Type<>() {
-
-        @Override
-        public @NotNull Template<Callback.ItemInteract> template() {
-            return Callback.ItemInteract.TEMPLATE;
-        }
-
-        @Override
-        public @NotNull Option<Guard.Type<?>> dispatch(@NotNull String name) {
-            return switch (name) {
-                case "hand" -> Option.some(HandGuard.TYPE);
-                default     -> Option.none();
-            };
-        }
+    public static final Type<Callback.EntityTick> ENTITY_TICK = Disastrous.register("tick/entity", Callback.EntityTick.TEMPLATE, name -> switch (name) {
+        case "periodically" -> Option.some(PeriodicGuard.PARSER);
+        default             -> Option.none();
     });
-    public static final Disaster.Type<Callback.BlockInteract> BLOCK_INTERACT = Disastrous.register("interact/block", new Disaster.Type<>() {
-
-        @Override
-        public @NotNull Template<Callback.BlockInteract> template() {
-            return Callback.BlockInteract.TEMPLATE;
-        }
-
-        @Override
-        public @NotNull Option<Guard.Type<?>> dispatch(@NotNull String name) {
-            return switch (name) {
-                case "hand" -> Option.some(HandGuard.TYPE);
-                default     -> Option.none();
-            };
-        }
+    public static final Type<Callback.ItemInteract> ITEM_INTERACT = Disastrous.register("interact/item", Callback.ItemInteract.TEMPLATE, name -> switch (name) {
+        case "hand" -> Option.some(HandGuard.PARSER);
+        default     -> Option.none();
     });
-    public static final Disaster.Type<Callback.EntityInteract> ENTITY_INTERACT = Disastrous.register("interact/entity", new Disaster.Type<>() {
-
-        @Override
-        public @NotNull Template<Callback.EntityInteract> template() {
-            return Callback.EntityInteract.TEMPLATE;
-        }
-
-        @Override
-        public @NotNull Option<Guard.Type<?>> dispatch(@NotNull String name) {
-            return switch (name) {
-                case "hand" -> Option.some(HandGuard.TYPE);
-                default     -> Option.none();
-            };
-        }
+    public static final Type<Callback.BlockInteract> BLOCK_INTERACT = Disastrous.register("interact/block", Callback.BlockInteract.TEMPLATE, name -> switch (name) {
+        case "hand" -> Option.some(HandGuard.PARSER);
+        default     -> Option.none();
+    });
+    public static final Type<Callback.EntityInteract> ENTITY_INTERACT = Disastrous.register("interact/entity", Callback.EntityInteract.TEMPLATE, name -> switch (name) {
+        case "hand" -> Option.some(HandGuard.PARSER);
+        default     -> Option.none();
     });
 
     private Disastrous() {
@@ -110,11 +69,23 @@ public final class Disastrous {
         return parser.parse();
     }
 
-    public static @NotNull Option<Disaster.Type<?>> dispatch(@NotNull ProxyIdentifier identifier) {
+    public static @NotNull Option<Type<?>> dispatch(@NotNull ProxyIdentifier identifier) {
         return Option.fromNullable(Disastrous.REGISTRY.getValue(ProxyIdentifier.to(identifier)));
     }
 
-    private static <T extends Callback> @NotNull Disaster.Type<T> register(@NotNull String name, @NotNull Disaster.Type<T> type) {
-        return Registry.register(Disastrous.REGISTRY, Identifier.withDefaultNamespace(name), type);
+    private static <T extends Callback> @NotNull Type<T> register(@NotNull String name,
+                                                                  @NotNull Template<T> template) {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(template);
+        return Disastrous.register(name, template, (_) -> Option.none());
+    }
+
+    private static <T extends Callback> @NotNull Type<T> register(@NotNull String name,
+                                                                  @NotNull Template<T> template,
+                                                                  @NotNull Function<String, Option<Guard.Parser<?>>> dispatch) {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(template);
+        Objects.requireNonNull(dispatch);
+        return Registry.register(Disastrous.REGISTRY, Identifier.withDefaultNamespace(name), new Type<>(template, dispatch));
     }
 }

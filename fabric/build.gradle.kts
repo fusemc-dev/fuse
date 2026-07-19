@@ -43,6 +43,11 @@ dependencies {
 
 loom {
     accessWidenerPath.set(project.layout.projectDirectory.file("src/main/resources/fuse.classtweaker"))
+
+    runConfigs.configureEach {
+        vmArgs.add("-Dcharcoal=true")
+        vmArgs.add("-Dcrayon=true")
+    }
 }
 
 tasks.processResources {

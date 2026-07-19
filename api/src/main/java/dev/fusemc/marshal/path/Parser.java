@@ -29,6 +29,7 @@ public final class Parser extends StringReader<String> {
     public @NotNull CommandPath parsePath() {
         if (this.skipWhitespace()) {
             var builder = new ArrayBuilder<Segment>(16);
+            var starred = this.parsePrefix();
             while (this.skipWhitespace()) {
                 var segment = this.parseSegment();
                 builder.append(segment);
@@ -39,16 +40,15 @@ public final class Parser extends StringReader<String> {
                     }
                     throw new Diagnostic("Expected a continuation of a path.", this.pointRange());
                 }
-                return new CommandPath(builder.build(Segment[]::new));
+                return new CommandPath(builder.build(Segment[]::new), starred);
             }
             // TODO: Probably change it up a bit.
-            return new CommandPath(builder.build(Segment[]::new));
+            return new CommandPath(builder.build(Segment[]::new), starred);
         }
         throw new Diagnostic("Expected a path.", this.pointRange());
     }
 
     public @NotNull Segment parseSegment() {
-        var stamp = this.position();
         if (this.skipWhitespace()) {
             var buffer = new StringBuilder();
             while (this.canRead()) {
@@ -63,11 +63,10 @@ public final class Parser extends StringReader<String> {
             }
             return Segment.literal(buffer.toString());
         }
-        throw Parser.incomplete(this.range(stamp));
+        throw Parser.incomplete(this.range(this.origin()));
     }
 
     public @NotNull Segment parseArgument(@NotNull String name) {
-        var stamp = this.position();
         if (this.skipWhitespace()) {
             if (this.readOnly(':')) {
                 var parameter = this.parseParameter();
@@ -84,19 +83,18 @@ public final class Parser extends StringReader<String> {
                                 return Segment.argument(name, parameter, type, suggester);
                             throw new Diagnostic("Expected a matching ')' to terminate the parameter constructor clause.", this.pointRange());
                         }
-                        throw Parser.incomplete(this.range(stamp));
+                        throw Parser.incomplete(this.range(this.origin()));
                     }
                     throw new Diagnostic("Expected a '(' to begin a parameter constructor clause.", this.pointRange());
                 }
-                throw Parser.incomplete(this.range(stamp));
+                throw Parser.incomplete(this.range(this.origin()));
             }
             throw new Diagnostic("Expected a ':' to separate the parameter type.", this.pointRange());
         }
-        throw Parser.incomplete(this.range(stamp));
+        throw Parser.incomplete(this.range(this.origin()));
     }
 
     public @NotNull Parameter<?> parseParameter() {
-        var stamp = this.position();
         if (this.skipWhitespace()) {
             var position = this.position();
             var buffer   = new StringBuilder();
@@ -121,11 +119,10 @@ public final class Parser extends StringReader<String> {
                 default -> throw new Diagnostic(String.format("Encountered an unrecognized parameter type '%s'.", candidate), this.range(position));
             };
         }
-        throw Parser.incomplete(this.range(stamp));
+        throw Parser.incomplete(this.range(this.origin()));
     }
 
     public @NotNull ProxyIdentifier parseSuggester() {
-        var stamp = this.position();
         if (this.skipWhitespace()) {
             if (this.readOnly('<')) {
                 var identifier = ProxyIdentifier.readIdentifier(this);
@@ -134,10 +131,22 @@ public final class Parser extends StringReader<String> {
                         return identifier;
                     throw new Diagnostic("Expected a matching '>' to terminate the suggester clause.", this.pointRange());
                 }
-                throw Parser.incomplete(this.range(stamp));
+                throw Parser.incomplete(this.range(this.origin()));
             }
             throw new Diagnostic("Expected a '<' to begin a suggester clause.", this.pointRange());
         }
-        throw Parser.incomplete(this.range(stamp));
+        throw Parser.incomplete(this.range(this.origin()));
+    }
+
+    public boolean parsePrefix() {
+        if (this.readOnly('*')) {
+            if (this.skipWhitespace()) {
+                if (this.readOnly('/'))
+                    return true;
+                throw new Diagnostic("Expected a '/' to terminate the star prefix.", this.pointRange());
+            }
+            throw Parser.incomplete(this.range(this.origin()));
+        }
+        return false;
     }
 }

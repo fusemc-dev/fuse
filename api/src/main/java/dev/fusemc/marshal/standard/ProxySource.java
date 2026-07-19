@@ -20,11 +20,11 @@ import java.util.Objects;
 @Documented("Source")
 public final class ProxySource implements ProxyObject {
 
-    private static final @NotNull String POSITION     = "position";
     private static final @NotNull String ENTITY       = "entity";
     private static final @NotNull String PLAYER       = "player";
     private static final @NotNull String WORLD        = "world";
     private static final @NotNull String SERVER       = "server";
+    private static final @NotNull String POSITION     = "position";
     private static final @NotNull String SEND_MESSAGE = "sendMessage";
 
     private static final @NotNull String @NotNull[] KEYS = {
@@ -37,20 +37,18 @@ public final class ProxySource implements ProxyObject {
     };
 
     private final @NotNull CommandSourceStack stack;
-    private final @NotNull ProxyExecutable position;
+    private final @NotNull ProxyServer server;
+    private final @NotNull ProxyWorld world;
+    private final @NotNull ProxyVec3 position;
     private final @NotNull ProxyExecutable entity;
     private final @NotNull ProxyExecutable player;
-    private final @NotNull ProxyExecutable world;
-    private final @NotNull ProxyExecutable server;
     private final @NotNull ProxyExecutable sendMessage;
 
     private ProxySource(@NotNull CommandSourceStack stack) {
         this.stack    = Objects.requireNonNull(stack);
-        this.position = (args) -> {
-            if (args.length == 0)
-                return ProxyVec3.from(this.stack.getPosition());
-            throw new UnsupportedOperationException();
-        };
+        this.server   = ProxyServer.from(this.stack.getServer());
+        this.world    = ProxyWorld.from(this.stack.getLevel());
+        this.position = ProxyVec3.from(this.stack.getPosition());
         this.entity = (args) -> {
             if (args.length == 0) {
                 var entity = this.stack.getEntity();
@@ -67,16 +65,6 @@ public final class ProxySource implements ProxyObject {
                     return ProxyPlayer.from(player);
                 return Tau.undefined();
             }
-            throw new UnsupportedOperationException();
-        };
-        this.world = (args) -> {
-            if (args.length == 0)
-                return ProxyWorld.from(this.stack.getLevel());
-            throw new UnsupportedOperationException();
-        };
-        this.server = (args) -> {
-            if (args.length == 0)
-                return ProxyServer.from(this.stack.getServer());
             throw new UnsupportedOperationException();
         };
         this.sendMessage = (args) -> {
@@ -98,11 +86,11 @@ public final class ProxySource implements ProxyObject {
     public Object getMember(@NotNull String key) {
         Objects.requireNonNull(key);
         return switch (key) {
+            case ProxySource.SERVER       -> this.server;
+            case ProxySource.WORLD        -> this.world;
             case ProxySource.POSITION     -> this.position;
             case ProxySource.ENTITY       -> this.entity;
             case ProxySource.PLAYER       -> this.player;
-            case ProxySource.WORLD        -> this.world;
-            case ProxySource.SERVER       -> this.server;
             case ProxySource.SEND_MESSAGE -> this.sendMessage;
             default -> throw new UnsupportedOperationException();
         };
