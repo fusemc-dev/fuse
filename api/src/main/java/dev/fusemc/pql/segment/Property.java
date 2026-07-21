@@ -4,6 +4,7 @@ import com.manchickas.optionated.Option;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Objects;
 
@@ -18,13 +19,13 @@ public record Property(@NotNull String name) implements Segment {
     }
 
     @Override
-    public boolean update(@NotNull Tag parent, @NotNull Tag value) {
+    public @NonNull Option<Tag> update(@NotNull Tag parent, @NotNull Tag value) {
         Objects.requireNonNull(parent);
         Objects.requireNonNull(value);
         if (parent instanceof CompoundTag compound) {
             compound.put(this.name, value);
-            return true;
+            return Option.some(compound);
         }
-        return false;
+        return Option.none();
     }
 }

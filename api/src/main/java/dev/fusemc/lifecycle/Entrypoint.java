@@ -82,6 +82,7 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
     private static final @NotNull String WARN         = "warn";
     private static final @NotNull String ERROR        = "error";
     private static final @NotNull String DISPATCH     = "dispatch";
+    private static final @NotNull String SCHEDULE     = "schedule";
 
     private static final @NotNull String @NotNull[] KEYS = {
             Entrypoint.ON,
@@ -92,6 +93,7 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
             Entrypoint.WARN,
             Entrypoint.ERROR,
             Entrypoint.DISPATCH,
+            Entrypoint.SCHEDULE,
     };
 
     private static final FileToIdConverter CONVERTER = new FileToIdConverter("script", ".js");
@@ -118,12 +120,22 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
     private final @NotNull Map<ProxyIdentifier, Suggester> suggesters;
     private final @NotNull Map<ProxyIdentifier, Property> properties;
     private final @NotNull Set<CloseableFileSystem> handles;
+    private final @NotNull PriorityQueue<Scheduled> pending;
 
     private final @NotNull ProxyExecutable on;
     private final @NotNull ProxyExecutable onProperty;
     private final @NotNull ProxyExecutable onCommand;
     private final @NotNull ProxyExecutable onSuggester;
     private final @NotNull ProxyExecutable dispatch;
+    private final @NotNull ProxyExecutable schedule;
+    /// The reference tick count.
+    ///
+    /// ---
+    ///
+    /// We require some sort of reference tick in order to schedule
+    /// and run tasks. Since we mostly care about relatively, it
+    /// is **never reset** either.
+    private long reference;
 
     public Entrypoint() {
         this.contexts         = HashBiMap.create();
@@ -132,6 +144,7 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
         this.commands         = new Object2ObjectOpenHashMap<>();
         this.suggesters       = new Object2ObjectOpenHashMap<>();
         this.properties       = new Object2ObjectOpenHashMap<>();
+        this.pending          = new PriorityQueue<>(Scheduled::compareTo);
         this.handles          = new ObjectArraySet<>();
         this.on = (args) -> {
             if (args.length == 2) {
@@ -218,6 +231,19 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
             }
             throw new UnsupportedOperationException();
         };
+        this.schedule = (args) -> {
+            if (args.length == 2) {
+                var callback = Tau.lower(Template.FUNCTION, args[0]);
+                var delay    = Tau.lower(Template.INTEGER, args[1]);
+                var initiator = Context.getCurrent();
+                if (initiator != null) {
+                    this.pending.add(new Scheduled(Context.getCurrent(), callback, this.reference + delay));
+                    return Tau.undefined();
+                }
+                throw new AssertionError();
+            }
+            throw new UnsupportedOperationException();
+        };
     }
 
     public static @NotNull Entrypoint instance() {
@@ -247,6 +273,27 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
             });
         }
         LOGGER.info("Successfully rehydrated {} property(ies).", successful);
+    }
+
+    public void tickPending(@NotNull MinecraftServer server) {
+        var manager = server.tickRateManager();
+        if (manager.runsNormally()) {
+            this.reference++;
+            this.pending.removeIf(scheduled -> {
+                try {
+                    return scheduled.attempt(this.reference);
+                } catch (Exception e) {
+                    var initiator  = scheduled.initiator();
+                    var identifier = this.contexts.inverse().get(initiator);
+                    if (identifier != null) {
+                        var logger = LoggerFactory.getLogger(identifier.toString());
+                        logger.error("An exception occurred within a scheduled callback.", e);
+                        return true;
+                    }
+                    throw new AssertionError();
+                }
+            });
+        }
     }
 
     public void refreshTree(@NotNull MinecraftServer server) {
@@ -382,6 +429,9 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
             var global = ctx.getBindings("js");
             global.putMember("script", this);
             global.putMember("io", new ProxyIO(identifier, system));
+            global.putMember("vec2", Tau.constructor(ProxyVec2.TEMPLATE));
+            global.putMember("vec3", Tau.constructor(ProxyVec3.TEMPLATE));
+            global.putMember("identifier", Tau.constructor(ProxyIdentifier.TEMPLATE));
             try {
                 ctx.eval(script.source);
                 if (system instanceof CloseableFileSystem closeable)
@@ -458,6 +508,7 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
         this.boundListeners.clear();
         this.properties.clear();
         this.commands.clear();
+        this.pending.clear();
         this.contexts.forEach((_, ctx) -> ctx.close(true));
         this.contexts.clear();
         return buffer.build(Property[]::new);
@@ -472,6 +523,7 @@ public final class Entrypoint implements ProxyObject, PreparableReloadListener {
             case Entrypoint.ON_COMMAND   -> this.onCommand;
             case Entrypoint.ON_SUGGESTER -> this.onSuggester;
             case Entrypoint.DISPATCH     -> this.dispatch;
+            case Entrypoint.SCHEDULE     -> this.schedule;
             default -> throw new UnsupportedOperationException();
         };
     }

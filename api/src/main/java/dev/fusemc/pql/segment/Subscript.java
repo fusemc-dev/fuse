@@ -5,6 +5,7 @@ import dev.fusemc.pql.PositionProvider;
 import net.minecraft.nbt.CollectionTag;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Objects;
 
@@ -25,13 +26,15 @@ public record Subscript(@NotNull Segment operand,
     }
 
     @Override
-    public boolean update(@NotNull Tag parent, @NotNull Tag value) {
+    public @NonNull Option<Tag> update(@NotNull Tag parent, @NotNull Tag value) {
         Objects.requireNonNull(parent);
         Objects.requireNonNull(value);
         if (parent instanceof CollectionTag collection) {
             var position = this.provider.compute(collection.size());
-            return collection.setTag(position, value);
+            if (collection.setTag(position, value))
+                return Option.some(collection);
+            return Option.none();
         }
-        return false;
+        return Option.none();
     }
 }

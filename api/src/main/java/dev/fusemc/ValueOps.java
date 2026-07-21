@@ -242,6 +242,11 @@ public final class ValueOps implements DynamicOps<Value> {
         Objects.requireNonNull(value);
         Objects.requireNonNull(entry);
         try {
+            if (Tau.isUndefined(value))
+                return DataResult.success(
+                        Value.asValue(new Value[]{ value }),
+                        Lifecycle.stable()
+                );
             var array = Tau.lower(ValueOps.ARRAY, value);
             return DataResult.success(
                     Value.asValue(ArrayBuilder.withAppended(array, entry)),
@@ -260,6 +265,13 @@ public final class ValueOps implements DynamicOps<Value> {
         Objects.requireNonNull(key);
         Objects.requireNonNull(value);
         try {
+            if (Tau.isUndefined(map))
+                return DataResult.success(
+                        Value.asValue(ObjectLike.builder()
+                                .append(Tau.lower(Template.STRING, key), value)
+                                .build()),
+                        Lifecycle.stable()
+                );
             var object = Tau.lower(ValueOps.OBJECT, map);
             var _key   = Tau.lower(Template.STRING, key);
             var buffer = ObjectLike.builder();

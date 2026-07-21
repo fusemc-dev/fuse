@@ -1,5 +1,6 @@
 package dev.fusemc.standard.block;
 
+import com.manchickas.optionated.Option;
 import dev.fusemc.ValueOps;
 import dev.fusemc.pql.PQL;
 import dev.fusemc.standard.ProxyIdentifier;
@@ -10,7 +11,9 @@ import dev.fusemc.tau.Template;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -183,9 +186,11 @@ public final class ProxyBlockEntity implements ProxyObject {
                 var world = this.self.getLevel();
                 if (world != null) {
                     var data = this.self.saveWithFullMetadata(world.registryAccess());
-                    if (path.update(data, value)) {
+                    if (path.update(data, value) instanceof Option.Some(var wrapped)) {
+                        assert wrapped != null;
                         try (var collector = new ProblemReporter.ScopedCollector(this.self.problemPath(), LOGGER)) {
-                            this.self.loadWithComponents(TagValueInput.create(collector, world.registryAccess(), data));
+                            this.self.loadWithComponents(TagValueInput.create(collector, world.registryAccess(), wrapped));
+                            this.self.setChanged();
                         }
                         return true;
                     }

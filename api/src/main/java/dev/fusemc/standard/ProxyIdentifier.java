@@ -39,7 +39,7 @@ import java.util.Objects;
 ///
 /// @since 0.1.0
 @Documented("Identifier")
-@Standardized("Identifier")
+@Standardized("identifier")
 public final class ProxyIdentifier implements ProxyObject, ProxyIterable, Inspectable {
 
     private static final @NotNull String NAMESPACE = "namespace";
@@ -54,7 +54,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable, Inspec
             ProxyIdentifier.TO_STRING,
     };
 
-    public static final Template<ProxyIdentifier> TEMPLATE = Template.union(
+    public static final @NotNull Template<ProxyIdentifier> TEMPLATE = Template.union(
             Template.STRING.flatMap(
                     ProxyIdentifier::parse,
                     identifier -> Option.fromNullable(identifier)
@@ -70,7 +70,7 @@ public final class ProxyIdentifier implements ProxyObject, ProxyIterable, Inspec
             )),
             Template.reference(ProxyIdentifier.class)
     );
-    public static final Template<Identifier> MAPPED_TEMPLATE = ProxyIdentifier.TEMPLATE.map(ProxyIdentifier::to, ProxyIdentifier::from);
+    public static final @NotNull Template<Identifier> MAPPED_TEMPLATE = ProxyIdentifier.TEMPLATE.map(ProxyIdentifier::to, ProxyIdentifier::from);
 
     private final @NotNull String namespace;
     private final @NotNull String path;

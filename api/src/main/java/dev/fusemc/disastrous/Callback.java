@@ -1,5 +1,6 @@
 package dev.fusemc.disastrous;
 
+import dev.fusemc.disastrous.disaster.Cancellable;
 import dev.fusemc.disastrous.disaster.WithInteraction;
 import dev.fusemc.standard.ProxyHand;
 import dev.fusemc.standard.block.ProxyBlock;
@@ -94,6 +95,22 @@ public interface Callback {
                                               @NotNull ProxyEntity<?> entity,
                                               @NotNull ProxyVec3 position,
                                               @NotNull ProxyHand hand);
+    }
+
+    interface Swing extends Callback {
+
+        @NotNull Template<Swing> TEMPLATE = Template.functional(Swing.class, Cancellable.RESULT);
+
+        boolean onSwing(@NotNull ProxyPlayer player, @NotNull ProxyHand hand);
+    }
+
+    interface BlockBreak extends Callback {
+
+        @NotNull Template<BlockBreak> TEMPLATE = Template.functional(BlockBreak.class, Cancellable.RESULT);
+
+        boolean onBreak(@NotNull ProxyPlayer player,
+                        @NotNull ProxyBlock block,
+                        @NotNull ProxyVec3 position);
     }
 
     @FunctionalInterface

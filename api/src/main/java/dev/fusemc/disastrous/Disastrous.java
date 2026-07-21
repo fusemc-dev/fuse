@@ -58,6 +58,11 @@ public final class Disastrous {
         case "hand" -> Option.some(HandGuard.PARSER);
         default     -> Option.none();
     });
+    public static final Type<Callback.BlockBreak> BLOCK_BREAK = Disastrous.register("break", Callback.BlockBreak.TEMPLATE);
+    public static final Type<Callback.Swing> SWING = Disastrous.register("swing", Callback.Swing.TEMPLATE, name -> switch (name) {
+        case "hand" -> Option.some(HandGuard.PARSER);
+        default     -> Option.none();
+    });
 
     private Disastrous() {
         throw new UnsupportedOperationException();

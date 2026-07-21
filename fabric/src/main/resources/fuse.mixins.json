@@ -8,6 +8,7 @@
         "client.IntegratedServerMixin",
         "server.DedicatedServerMixin",
         "server.ServerGamePacketListenerImplMixin",
+        "server.ServerGamePacketListenerImplMixin$InteractionHandler",
         "server.ServerPlayerGameModeMixin"
     ],
     "injectors": {

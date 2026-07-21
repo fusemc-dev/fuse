@@ -16,12 +16,16 @@ import dev.fusemc.tau.Template;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.level.levelgen.feature.IcebergFeature;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -43,6 +47,7 @@ public final class ProxyWorld implements ProxyObject {
     private static final @NotNull String IS_IN  = "isIn";
     private static final @NotNull String BLOCK  = "block";
     private static final @NotNull String BLOCK_ENTITY = "blockEntity";
+    private static final @NotNull String BREAK = "break";
     private static final @NotNull String INSERT = "insert";
     private static final @NotNull String SPAWN  = "spawn";
     private static final @NotNull String DROP   = "drop";
@@ -50,6 +55,9 @@ public final class ProxyWorld implements ProxyObject {
     private static final @NotNull String EXISTS = "exists";
     private static final @NotNull String PARTICLE = "particle";
     private static final @NotNull String PLAY_SOUND = "playSound";
+    private static final @NotNull String EXECUTE = "execute";
+    private static final @NotNull String FUNCTION = "function";
+    private static final @NotNull String PLACE = "place";
     private static final @NotNull String[] KEYS = {
             ProxyWorld.TYPE,
             ProxyWorld.SERVER,
@@ -57,6 +65,7 @@ public final class ProxyWorld implements ProxyObject {
             ProxyWorld.IS_IN,
             ProxyWorld.BLOCK,
             ProxyWorld.BLOCK_ENTITY,
+            ProxyWorld.BREAK,
             ProxyWorld.INSERT,
             ProxyWorld.SPAWN,
             ProxyWorld.DROP,
@@ -64,6 +73,9 @@ public final class ProxyWorld implements ProxyObject {
             ProxyWorld.EXISTS,
             ProxyWorld.PARTICLE,
             ProxyWorld.PLAY_SOUND,
+            ProxyWorld.EXECUTE,
+            ProxyWorld.FUNCTION,
+            ProxyWorld.PLACE,
     };
 
     private static final Interner<ProxyWorld> INTERNER
@@ -76,12 +88,16 @@ public final class ProxyWorld implements ProxyObject {
     private final @NotNull ProxyExecutable isIn;
     private final @NotNull ProxyExecutable block;
     private final @NotNull ProxyExecutable blockEntity;
+    private final @NotNull ProxyExecutable breakBlock;
     private final @NotNull ProxyExecutable spawn;
     private final @NotNull ProxyExecutable drop;
     private final @NotNull ProxyExecutable select;
     private final @NotNull ProxyExecutable exists;
     private final @NotNull ProxyExecutable particle;
     private final @NotNull ProxyExecutable playSound;
+    private final @NotNull ProxyExecutable execute;
+    private final @NotNull ProxyExecutable function;
+    private final @NotNull ProxyExecutable place;
 
     public ProxyWorld(@NonNull ServerLevel self) {
         this.self   = Objects.requireNonNull(self);
@@ -90,38 +106,34 @@ public final class ProxyWorld implements ProxyObject {
         this.isOf = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var dimension  = this.self.registryAccess()
-                        .lookupOrThrow(Registries.DIMENSION_TYPE)
-                        .getValue(identifier);
-                if (dimension != null)
-                    return this.self.dimensionType() == dimension;
-                return false;
+                var holder = this.self.dimensionTypeRegistration();
+                return holder.is(identifier);
             }
             throw new UnsupportedOperationException();
         };
         this.isIn = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var key        = TagKey.create(Registries.DIMENSION_TYPE, identifier);
-                return this.self.dimensionTypeRegistration().is(key);
+                var holder = this.self.dimensionTypeRegistration();
+                return holder.is(TagKey.create(Registries.DIMENSION_TYPE, identifier));
             }
             throw new UnsupportedOperationException();
         };
-        this.block = (args) -> {
-            if (args.length == 1) {
+        this.block = (args) -> switch (args.length) {
+            case 1 -> {
                 var position = Tau.lower(ProxyVec3.TEMPLATE, args[0]).toBlockPos();
                 var state    = this.self.getBlockState(position);
-                return ProxyBlock.from(state);
+                yield ProxyBlock.from(state);
             }
-            if (args.length == 2) {
+            case 2 -> {
                 var position = Tau.lower(ProxyVec3.TEMPLATE, args[0]).toBlockPos();
                 var updater  = Tau.lower(Template.sequence(Updater.TEMPLATE, ProxyBlock.TEMPLATE), args[1]);
-                return switch (updater) {
+                yield switch (updater) {
                     case Either.Left(var wrapped) -> this.self.setBlockAndUpdate(position, wrapped.update(ProxyBlock.from(this.self.getBlockState(position))).unwrap());
                     case Either.Right(var wrapped) -> this.self.setBlockAndUpdate(position, wrapped.unwrap());
                 };
             }
-            throw new UnsupportedOperationException();
+            default -> throw new UnsupportedOperationException();
         };
         this.blockEntity = (args) -> {
             if (args.length == 1) {
@@ -129,6 +141,18 @@ public final class ProxyWorld implements ProxyObject {
                 var entity = this.self.getBlockEntity(position);
                 if (entity != null)
                     return ProxyBlockEntity.from(entity);
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.breakBlock = (args) -> {
+            if (args.length == 1 || args.length == 2) {
+                var position = Tau.lower(ProxyVec3.TEMPLATE, args[0]);
+                if (args.length == 2) {
+                    this.self.destroyBlock(position.toBlockPos(), Tau.lower(Template.BOOLEAN, args[1]));
+                    return Tau.undefined();
+                }
+                this.self.destroyBlock(position.toBlockPos(), true);
                 return Tau.undefined();
             }
             throw new UnsupportedOperationException();
@@ -216,6 +240,53 @@ public final class ProxyWorld implements ProxyObject {
             }
             throw new UnsupportedOperationException();
         };
+        this.execute = (args) -> {
+            if (args.length == 1) {
+                var command    = Tau.lower(Template.STRING, args[0]);
+                var server     = this.self.getServer();
+                var commands   = server.getCommands();
+                var dispatcher = commands.getDispatcher();
+                var results    = dispatcher.parse(command, server.createCommandSourceStack()
+                        .withPermission(LevelBasedPermissionSet.GAMEMASTER)
+                        .withSuppressedOutput());
+                commands.performCommand(results, command);
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.function = (args) -> {
+            if (args.length == 1) {
+                var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var server     = this.self.getServer();
+                var functions  = server.getFunctions();
+                var option   = functions.get(identifier);
+                if (option.isPresent()) {
+                    var function = option.get();
+                    functions.execute(function, functions.getGameLoopSender());
+                    return Tau.undefined();
+                }
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.place = (args) -> {
+            if (args.length == 2) {
+                var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var position   = Tau.lower(ProxyVec3.TEMPLATE, args[1]).toBlockPos();
+                var manager = this.self.getStructureManager();
+                var option = manager.get(identifier);
+                if (option.isPresent()) {
+                    var template = option.get();
+                    var settings = new StructurePlaceSettings()
+                            .setMirror(Mirror.NONE)
+                            .setRotation(Rotation.NONE)
+                            .setKnownShape(false);
+                    return template.placeInWorld(this.self, position, position, settings, this.self.random, Block.UPDATE_CLIENTS);
+                }
+                return false;
+            }
+            throw new UnsupportedOperationException();
+        };
     }
 
     public static ProxyWorld from(@NotNull ServerLevel world) {
@@ -233,12 +304,16 @@ public final class ProxyWorld implements ProxyObject {
             case ProxyWorld.IS_IN      -> this.isIn;
             case ProxyWorld.BLOCK      -> this.block;
             case ProxyWorld.BLOCK_ENTITY -> this.blockEntity;
+            case ProxyWorld.BREAK      -> this.breakBlock;
             case ProxyWorld.SPAWN      -> this.spawn;
             case ProxyWorld.DROP       -> this.drop;
             case ProxyWorld.SELECT     -> this.select;
             case ProxyWorld.EXISTS     -> this.exists;
             case ProxyWorld.PARTICLE   -> this.particle;
             case ProxyWorld.PLAY_SOUND -> this.playSound;
+            case ProxyWorld.EXECUTE    -> this.execute;
+            case ProxyWorld.FUNCTION   -> this.function;
+            case ProxyWorld.PLACE      -> this.place;
             default -> throw new UnsupportedOperationException();
         };
     }

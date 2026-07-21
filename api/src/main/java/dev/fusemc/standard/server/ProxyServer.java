@@ -28,18 +28,20 @@ import java.util.stream.StreamSupport;
 
 public final class ProxyServer implements ProxyObject {
 
-    private static final @NotNull String WORLD    = "world";
-    private static final @NotNull String WORLDS   = "worlds";
-    private static final @NotNull String PLAYER   = "player";
-    private static final @NotNull String PLAYERS  = "players";
-    private static final @NotNull String GAMERULE = "gamerule";
-    private static final @NotNull String REGISTRY = "registry";
+    private static final @NotNull String WORLD     = "world";
+    private static final @NotNull String WORLDS    = "worlds";
+    private static final @NotNull String PLAYER    = "player";
+    private static final @NotNull String PLAYERS   = "players";
+    private static final @NotNull String GAMERULE  = "gamerule";
+    private static final @NotNull String BROADCAST = "broadcast";
+    private static final @NotNull String REGISTRY  = "registry";
     private static final @NotNull String @NotNull[] KEYS = {
             ProxyServer.WORLD,
             ProxyServer.WORLDS,
             ProxyServer.PLAYER,
             ProxyServer.PLAYERS,
             ProxyServer.GAMERULE,
+            ProxyServer.BROADCAST,
             ProxyServer.REGISTRY,
     };
     private static final Interner<ProxyServer> INTERNER
@@ -50,6 +52,7 @@ public final class ProxyServer implements ProxyObject {
     private final @NotNull ProxyExecutable worlds;
     private final @NotNull ProxyExecutable player;
     private final @NotNull ProxyExecutable players;
+    private final @NotNull ProxyExecutable broadcast;
     private final @NotNull ProxyExecutable gamerule;
     private final @NotNull ProxyExecutable registry;
 
@@ -93,21 +96,31 @@ public final class ProxyServer implements ProxyObject {
                         .toArray(ProxyPlayer[]::new);
             throw new UnsupportedOperationException();
         };
-        this.gamerule = (args) -> {
-            if (args.length == 2) {
+        this.gamerule = (args) -> switch (args.length) {
+            case 1 -> {
                 var type  = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
                 var rule  = BuiltInRegistries.GAME_RULE.getValue(type);
                 if (rule != null)
-                    return this.setRule(rule, args[1]);
-                return Tau.undefined();
-            }
-            if (args.length == 1) {
-                var type  = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var rule  = BuiltInRegistries.GAME_RULE.getValue(type);
-                if (rule != null)
-                    return this.self.getWorldData()
+                    yield this.self.getWorldData()
                             .getGameRules()
                             .get(rule);
+                yield Tau.undefined();
+            }
+            case 2 -> {
+                var type  = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var rule  = BuiltInRegistries.GAME_RULE.getValue(type);
+                if (rule != null)
+                    yield this.setRule(rule, args[1]);
+                yield Tau.undefined();
+            }
+            default -> throw new UnsupportedOperationException();
+        };
+        this.broadcast = (args) -> {
+            if (args.length == 1) {
+                var broadcast = Tau.lower(Broadcast.TEMPLATE, args[0]);
+                var players = this.self.getPlayerList();
+                for (var player : players.getPlayers())
+                    broadcast.consume(ProxyPlayer.from(player));
                 return Tau.undefined();
             }
             throw new UnsupportedOperationException();
@@ -151,6 +164,7 @@ public final class ProxyServer implements ProxyObject {
             case ProxyServer.PLAYER   -> this.player;
             case ProxyServer.PLAYERS  -> this.players;
             case ProxyServer.GAMERULE -> this.gamerule;
+            case ProxyServer.BROADCAST -> this.broadcast;
             case ProxyServer.REGISTRY -> this.registry;
             default -> throw new UnsupportedOperationException();
         };
@@ -199,5 +213,12 @@ public final class ProxyServer implements ProxyObject {
 
     public @NotNull MinecraftServer unwrap() {
         return this.self;
+    }
+
+    interface Broadcast {
+
+        @NotNull Template<Broadcast> TEMPLATE = Template.functional(Broadcast.class);
+
+        void consume(@NotNull ProxyPlayer player);
     }
 }

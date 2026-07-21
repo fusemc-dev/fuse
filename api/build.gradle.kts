@@ -20,7 +20,7 @@ val graalVersion: String by project
 val minecraftVersion: String by project
 
 dependencies {
-    api("dev.fusemc:tau:0.2.9")
+    api("dev.fusemc:tau:0.2.11")
     api("dev.fusemc:iota:0.2.3")
     api("dev.fusemc:quelle:0.1.3")
     api("com.manchickas:optionated:2.0.2")

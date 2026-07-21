@@ -30,7 +30,7 @@ import java.util.Objects;
 /// @since 0.1.0
 /// @see ProxyVec3
 @Documented("Vec2")
-@Standardized("Vec2")
+@Standardized("vec2")
 public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable {
 
     private static final @NotNull String X                   = "x";
@@ -41,6 +41,8 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
     private static final @NotNull String CENTER              = "center";
     private static final @NotNull String DISTANCE_TO         = "distanceTo";
     private static final @NotNull String SQUARED_DISTANCE_TO = "squaredDistanceTo";
+    private static final @NotNull String MIN                 = "min";
+    private static final @NotNull String MAX                 = "max";
     private static final @NotNull String TO_CARTESIAN        = "toCartesian";
     private static final @NotNull String TO_STRING           = "toString";
 
@@ -53,11 +55,13 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
             ProxyVec2.CENTER,
             ProxyVec2.DISTANCE_TO,
             ProxyVec2.SQUARED_DISTANCE_TO,
+            ProxyVec2.MIN,
+            ProxyVec2.MAX,
             ProxyVec2.TO_CARTESIAN,
             ProxyVec2.TO_STRING,
     };
 
-    public static final Template<ProxyVec2> TEMPLATE = Template.union(
+    public static final @NotNull Template<ProxyVec2> TEMPLATE = Template.union(
             Template.reference(ProxyVec2.class),
             Template.tuple(
                     Template.DOUBLE.element(vec -> vec.x),
@@ -73,7 +77,6 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
 
     public final double x;
     public final double y;
-
     private final @NotNull ProxyExecutable add;
     private final @NotNull ProxyExecutable sub;
     private final @NotNull ProxyExecutable scale;
@@ -81,6 +84,8 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
     private final @NotNull ProxyExecutable distanceTo;
     private final @NotNull ProxyExecutable squaredDistanceTo;
     private final @NotNull ProxyExecutable toCartesian;
+    private final @NotNull ProxyExecutable min;
+    private final @NotNull ProxyExecutable max;
 
     public ProxyVec2(double x, double y) {
         this.x = x;
@@ -122,6 +127,20 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
             if (args.length == 1) {
                 var other = Tau.lower(ProxyVec2.TEMPLATE, args[0]);
                 return Math.sqrt(Math.pow(this.x - other.x, 2) + Math.pow(this.y - other.y, 2));
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.min = (args) -> {
+            if (args.length == 1) {
+                var other = Tau.lower(ProxyVec2.TEMPLATE, args[0]);
+                return new ProxyVec2(Math.min(this.x, other.x), Math.min(this.y, other.y));
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.max = (args) -> {
+            if (args.length == 1) {
+                var other = Tau.lower(ProxyVec2.TEMPLATE, args[0]);
+                return new ProxyVec2(Math.max(this.x, other.x), Math.max(this.y, other.y));
             }
             throw new UnsupportedOperationException();
         };
@@ -167,6 +186,8 @@ public final class ProxyVec2 implements ProxyObject, ProxyIterable, Inspectable 
             case ProxyVec2.CENTER              -> this.center;
             case ProxyVec2.DISTANCE_TO         -> this.distanceTo;
             case ProxyVec2.SQUARED_DISTANCE_TO -> this.squaredDistanceTo;
+            case ProxyVec2.MIN                 -> this.min;
+            case ProxyVec2.MAX                 -> this.max;
             case ProxyVec2.TO_CARTESIAN        -> this.toCartesian;
             case ProxyVec2.TO_STRING           -> ProxyVec2.TO_STRING_IMPL;
             default -> throw new UnsupportedOperationException();

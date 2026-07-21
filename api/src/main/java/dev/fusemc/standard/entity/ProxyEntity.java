@@ -21,6 +21,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -87,6 +88,7 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
     private static final @NotNull String MATCHES = "matches";
     private static final @NotNull String DAMAGE = "damage";
     private static final @NotNull String EXECUTE = "execute";
+    private static final @NotNull String FUNCTION = "function";
     private static final @NotNull String REMOVE = "remove";
     private static final @NotNull String KILL = "kill";
     private static final @NotNull String TELEPORT = "teleport";
@@ -111,6 +113,7 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
             ProxyEntity.MATCHES,
             ProxyEntity.DAMAGE,
             ProxyEntity.EXECUTE,
+            ProxyEntity.FUNCTION,
             ProxyEntity.REMOVE,
             ProxyEntity.KILL,
             ProxyEntity.TELEPORT,
@@ -137,6 +140,7 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
     private final @NotNull ProxyExecutable matches;
     private final @NotNull ProxyExecutable isSneaking;
     private final @NotNull ProxyExecutable execute;
+    private final @NotNull ProxyExecutable function;
     private final @NotNull ProxyExecutable damage;
     private final @NotNull ProxyExecutable remove;
     private final @NotNull ProxyExecutable kill;
@@ -148,21 +152,16 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
         this.isOf = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var type = BuiltInRegistries.ENTITY_TYPE.get(identifier)
-                        .map(Holder.Reference::value);
-                if (type.isPresent()) {
-                    var unwrapped = type.get();
-                    return this.self.getType() == unwrapped;
-                }
-                return false;
+                var type = BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(this.self.getType());
+                return type.is(identifier);
             }
             throw new UnsupportedOperationException();
         };
         this.isIn = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var key = TagKey.create(Registries.ENTITY_TYPE, identifier);
-                return this.self.getType().is(key);
+                var type = BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(this.self.getType());
+                return type.is(TagKey.create(Registries.ENTITY_TYPE, identifier));
             }
             throw new UnsupportedOperationException();
         };
@@ -212,8 +211,9 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
                     var output = TagValueOutput.createWithContext(collector, this.self.registryAccess());
                     if (this.self.save(output)) {
                         var buffer = output.buildResult();
-                        if (path.update(buffer, value)) {
-                            var input = TagValueInput.create(collector, this.self.registryAccess(), buffer);
+                        if (path.update(buffer, value) instanceof Option.Some(var wrapped)) {
+                            assert wrapped != null;
+                            var input = TagValueInput.create(collector, this.self.registryAccess(), wrapped);
                             this.self.load(input);
                             return true;
                         }
@@ -363,30 +363,43 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
         };
         this.execute = (args) -> {
             if (args.length == 1) {
-                var command = Tau.lower(Template.STRING, args[0]);
-                var world   = this.self.level();
-                var server  = world.getServer();
-                if (server != null) {
-                    var commands   = server.getCommands();
-                    var dispatcher = commands.getDispatcher();
-                    // The idea isn't that the command is run BY the entity, but
-                    // rather AS the entity. We thus do not use the command source
-                    // of a potential player and always use elevated permissions.
-                    var results    = dispatcher.parse(command, new CommandSourceStack(
-                            CommandSource.NULL,
-                            this.self.position(),
-                            this.self.getRotationVector(),
-                            (ServerLevel) world,
-                            LevelBasedPermissionSet.GAMEMASTER,
-                            this.self.getPlainTextName(),
-                            this.self.getDisplayName(),
-                            server,
-                            this.self
-                    ));
-                    commands.performCommand(results, command);
+                var command    = Tau.lower(Template.STRING, args[0]);
+                var world      = (ServerLevel) this.self.level();
+                var server     = world.getServer();
+                var commands   = server.getCommands();
+                var dispatcher = commands.getDispatcher();
+                // The idea isn't that the command is run BY the entity, but
+                // rather AS the entity. We thus do not use the command source
+                // of a potential player and always use elevated permissions.
+                var results    = dispatcher.parse(command, new CommandSourceStack(
+                        CommandSource.NULL,
+                        this.self.position(),
+                        this.self.getRotationVector(),
+                        world,
+                        LevelBasedPermissionSet.GAMEMASTER,
+                        this.self.getPlainTextName(),
+                        this.self.getDisplayName(),
+                        server,
+                        this.self
+                ));
+                commands.performCommand(results, command);
+                return Tau.undefined();
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.function = (args) -> {
+            if (args.length == 1) {
+                var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var level      = (ServerLevel) this.self.level();
+                var server     = level.getServer();
+                var functions  = server.getFunctions();
+                var option     = functions.get(identifier);
+                if (option.isPresent()) {
+                    var function = option.get();
+                    functions.execute(function, functions.getGameLoopSender());
                     return Tau.undefined();
                 }
-                throw new AssertionError();
+                return Tau.undefined();
             }
             throw new UnsupportedOperationException();
         };
@@ -450,6 +463,7 @@ public class ProxyEntity<T extends Entity> implements ProxyObject {
             case ProxyEntity.KILL        -> this.kill;
             case ProxyEntity.DAMAGE      -> this.damage;
             case ProxyEntity.EXECUTE     -> this.execute;
+            case ProxyEntity.FUNCTION    -> this.function;
             case ProxyEntity.TELEPORT    -> this.teleport;
             case ProxyEntity.TO_STRING   -> this.toString;
             default -> throw new UnsupportedOperationException();

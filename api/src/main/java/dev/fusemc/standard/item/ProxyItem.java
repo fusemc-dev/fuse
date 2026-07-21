@@ -104,9 +104,11 @@ public final class ProxyItem implements ProxyObject {
                     @SuppressWarnings("unchecked")
                     var codec  = (Codec<Object>) component.codecOrThrow();
                     var value  = (Object) this.self.get(component);
-                    return codec.encodeStart(ValueOps.INSTANCE, value)
-                            .resultOrPartial()
-                            .orElseGet(Tau::undefined);
+                    if (value != null)
+                        return codec.encodeStart(ValueOps.INSTANCE, value)
+                                .resultOrPartial()
+                                .orElseGet(Tau::undefined);
+                    return Tau.undefined();
                 }
                 return Tau.undefined();
             }
@@ -134,21 +136,17 @@ public final class ProxyItem implements ProxyObject {
         };
         this.isOf = (args) -> {
             if (args.length == 1) {
-                var other = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var entry = BuiltInRegistries.ITEM.get(other);
-                if (entry.isPresent()) {
-                    var unwrapped = entry.get();
-                    return this.self.is(unwrapped);
-                }
-                return false;
+                var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var holder = this.self.getItemHolder();
+                return holder.is(identifier);
             }
             throw new UnsupportedOperationException();
         };
         this.isIn = (args) -> {
             if (args.length == 1) {
-                var other = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var key   = TagKey.create(Registries.ITEM, other);
-                return this.self.is(key);
+                var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
+                var holder = this.self.getItemHolder();
+                return holder.is(TagKey.create(Registries.ITEM, identifier));
             }
             throw new UnsupportedOperationException();
         };

@@ -1,6 +1,7 @@
 package dev.fusemc.standard.math;
 
 import dev.fusemc.iota.Standardized;
+import dev.fusemc.marshal.standard.ProxyContext;
 import dev.fusemc.tau.Documented;
 import dev.fusemc.tau.Inspectable;
 import dev.fusemc.tau.Tau;
@@ -31,7 +32,7 @@ import java.util.Objects;
 /// @since 0.1.0
 /// @see ProxyVec2
 @Documented("Vec3")
-@Standardized("Vec3")
+@Standardized("vec3")
 public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable {
 
     public static final @NotNull ProxyVec3 ZERO = new ProxyVec3(0, 0, 0);
@@ -45,6 +46,8 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable 
     private static final @NotNull String CENTER = "center";
     private static final @NotNull String DISTANCE_TO = "distanceTo";
     private static final @NotNull String SQUARED_DISTANCE_TO = "squaredDistanceTo";
+    private static final @NotNull String MIN = "min";
+    private static final @NotNull String MAX = "max";
     private static final @NotNull String TO_STRING = "toString";
     private static final @NotNull String @NotNull[] KEYS = {
             ProxyVec3.X,
@@ -56,10 +59,12 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable 
             ProxyVec3.CENTER,
             ProxyVec3.DISTANCE_TO,
             ProxyVec3.SQUARED_DISTANCE_TO,
+            ProxyVec3.MIN,
+            ProxyVec3.MAX,
             ProxyVec3.TO_STRING,
     };
 
-    public static final Template<ProxyVec3> TEMPLATE = Template.union(
+    public static final @NotNull Template<ProxyVec3> TEMPLATE = Template.union(
             Template.tuple(
                     Template.DOUBLE.element(vec -> vec.x),
                     Template.DOUBLE.element(vec -> vec.y),
@@ -69,15 +74,17 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable 
             Template.reference(ProxyVec3.class)
     );
 
-    public final @HostAccess.Export double x;
-    public final @HostAccess.Export double y;
-    public final @HostAccess.Export double z;
+    public final double x;
+    public final double y;
+    public final double z;
     private final @NotNull ProxyExecutable add;
     private final @NotNull ProxyExecutable sub;
     private final @NotNull ProxyExecutable scale;
     private final @NotNull ProxyExecutable center;
     private final @NotNull ProxyExecutable distanceTo;
     private final @NotNull ProxyExecutable squaredDistanceTo;
+    private final @NotNull ProxyExecutable min;
+    private final @NotNull ProxyExecutable max;
     private final @NotNull ProxyExecutable toString;
 
     public ProxyVec3(double x, double y, double z) {
@@ -124,6 +131,28 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable 
             }
             throw new UnsupportedOperationException();
         };
+        this.min = (args) -> {
+            if (args.length == 1) {
+                var other = Tau.lower(ProxyVec3.TEMPLATE, args[0]);
+                return new ProxyVec3(
+                        Math.min(this.x, other.x),
+                        Math.min(this.y, other.y),
+                        Math.min(this.z, other.z)
+                );
+            }
+            throw new UnsupportedOperationException();
+        };
+        this.max = (args) -> {
+            if (args.length == 1) {
+                var other = Tau.lower(ProxyVec3.TEMPLATE, args[0]);
+                return new ProxyVec3(
+                        Math.max(this.x, other.x),
+                        Math.max(this.y, other.y),
+                        Math.max(this.z, other.z)
+                );
+            }
+            throw new UnsupportedOperationException();
+        };
         this.toString = (args) -> {
             if (args.length == 0)
                 return this.toString();
@@ -162,6 +191,8 @@ public final class ProxyVec3 implements ProxyObject, ProxyIterable, Inspectable 
             case ProxyVec3.CENTER              -> this.center;
             case ProxyVec3.DISTANCE_TO         -> this.distanceTo;
             case ProxyVec3.SQUARED_DISTANCE_TO -> this.squaredDistanceTo;
+            case ProxyVec3.MIN                 -> this.min;
+            case ProxyVec3.MAX                 -> this.max;
             case ProxyVec3.TO_STRING           -> this.toString;
             default -> throw new UnsupportedOperationException();
         };

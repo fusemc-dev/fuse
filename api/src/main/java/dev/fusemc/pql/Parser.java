@@ -24,16 +24,21 @@ public final class Parser extends StringReader<String> {
     public @NotNull Path parsePath() {
         var buffer   = new ArrayBuilder<Segment>(16);
         var position = this.position();
-        while (this.skipWhitespace()) {
-            var segment = this.parseSegment();
-            if (this.skipWhitespace()) {
-                if (this.readOnly('/')) {
-                    buffer.append(segment);
-                    continue;
+        if (this.skipWhitespace()) {
+            if (this.readOnly('/'))
+                buffer.append(Segment.ROOT);
+            while (this.skipWhitespace()) {
+                var segment = this.parseSegment();
+                if (this.skipWhitespace()) {
+                    if (this.readOnly('/')) {
+                        buffer.append(segment);
+                        continue;
+                    }
+                    throw new Diagnostic("Expected a '/' to separate segments in a PQL expression.", this.pointRange());
                 }
-                throw new Diagnostic("Expected a '/' to separate segments in a PQL expression.", this.pointRange());
+                buffer.append(segment);
             }
-            return new Path(buffer.append(segment).build(Segment[]::new));
+            return new Path(buffer.build(Segment[]::new));
         }
         throw Parser.incomplete(this.range(position));
     }

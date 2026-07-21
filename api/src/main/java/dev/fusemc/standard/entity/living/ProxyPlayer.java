@@ -17,6 +17,8 @@ import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -44,11 +46,14 @@ public final class ProxyPlayer extends ProxyLiving<ServerPlayer> {
         }
     }
 
+    private static final @NotNull Template<GameType> GAME_TYPE = Template.enumerate(GameType.class, GameType::getName);
+
     private static final @NotNull String TITLE        = "title";
     private static final @NotNull String SUBTITLE     = "subtitle";
     private static final @NotNull String ACTIONBAR    = "actionbar";
     private static final @NotNull String GRANT        = "grantAdvancement";
     private static final @NotNull String REVOKE       = "revokeAdvancement";
+    private static final @NotNull String GAMEMODE     = "gamemode";
     private static final @NotNull String SEND_MESSAGE = "sendMessage";
     private static final @NotNull String PLAY_SOUND   = "playSound";
     private static final @NotNull String OFFER        = "offer";
@@ -60,6 +65,7 @@ public final class ProxyPlayer extends ProxyLiving<ServerPlayer> {
             ProxyPlayer.ACTIONBAR,
             ProxyPlayer.GRANT,
             ProxyPlayer.REVOKE,
+            ProxyPlayer.GAMEMODE,
             ProxyPlayer.SEND_MESSAGE,
             ProxyPlayer.PLAY_SOUND,
             ProxyPlayer.OFFER,
@@ -71,6 +77,7 @@ public final class ProxyPlayer extends ProxyLiving<ServerPlayer> {
     private final @NotNull ProxyExecutable actionbar;
     private final @NotNull ProxyExecutable grantAdvancement;
     private final @NotNull ProxyExecutable revokeAdvancement;
+    private final @NotNull ProxyExecutable gamemode;
     private final @NotNull ProxyExecutable sendMessage;
     private final @NotNull ProxyExecutable playSound;
     private final @NotNull ProxyExecutable offer;
@@ -150,6 +157,14 @@ public final class ProxyPlayer extends ProxyLiving<ServerPlayer> {
             }
             throw new UnsupportedOperationException();
         };
+        this.gamemode = (args) -> switch (args.length) {
+            case 0 -> Tau.raise(ProxyPlayer.GAME_TYPE, this.self.gameMode());
+            case 1 -> {
+                var mode = Tau.lower(ProxyPlayer.GAME_TYPE, args[0]);
+                yield this.self.setGameMode(mode);
+            }
+            default ->  throw new UnsupportedOperationException();
+        };
         this.sendMessage = (args) -> {
             if (args.length == 1) {
                 var component = Tau.lower(ValueOps.COMPONENT, args[0]);
@@ -227,6 +242,7 @@ public final class ProxyPlayer extends ProxyLiving<ServerPlayer> {
             case ProxyPlayer.SEND_MESSAGE -> this.sendMessage;
             case ProxyPlayer.GRANT        -> this.grantAdvancement;
             case ProxyPlayer.REVOKE       -> this.revokeAdvancement;
+            case ProxyPlayer.GAMEMODE     -> this.gamemode;
             case ProxyPlayer.PLAY_SOUND   -> this.playSound;
             case ProxyPlayer.OFFER        -> this.offer;
             case ProxyPlayer.DROP -> this.drop;

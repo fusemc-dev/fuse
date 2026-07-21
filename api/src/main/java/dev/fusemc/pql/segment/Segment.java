@@ -9,6 +9,19 @@ import java.util.Objects;
 
 public interface Segment {
 
+    @NotNull Segment ROOT = new Segment() {
+
+        @Override
+        public @NotNull Option<Tag> resolve(@NotNull Tag parent) {
+            return Option.some(parent);
+        }
+
+        @Override
+        public @NotNull Option<Tag> update(@NotNull Tag parent, @NotNull Tag value) {
+            return Option.some(value);
+        }
+    };
+
     static @NotNull Segment property(@NotNull String name) {
         Objects.requireNonNull(name);
         return new Property(name);
@@ -23,5 +36,5 @@ public interface Segment {
 
     @NotNull Option<Tag> resolve(@NotNull Tag parent);
 
-    boolean update(@NotNull Tag parent, @NotNull Tag value);
+    @NotNull <T extends Tag> Option<T> update(@NotNull T parent, @NotNull Tag value);
 }

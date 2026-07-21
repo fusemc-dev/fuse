@@ -38,8 +38,11 @@ public final class ProxyBlock implements ProxyObject {
             ProxyBlock.GET,
     };
 
-    public static final @NotNull Template<ProxyBlock> TEMPLATE = ValueOps.delegate(BlockState.CODEC, Description.keyword("Block"))
-            .map(ProxyBlock::from, ProxyBlock::unwrap);
+    public static final @NotNull Template<ProxyBlock> TEMPLATE = Template.union(
+            ValueOps.delegate(BlockState.CODEC, Description.keyword("Block"))
+                    .map(ProxyBlock::from, ProxyBlock::unwrap),
+            Template.reference(ProxyBlock.class)
+    );
 
     private final @NotNull BlockState self;
     private final @NotNull ProxyIdentifier type;
@@ -55,21 +58,16 @@ public final class ProxyBlock implements ProxyObject {
         this.isOf = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var type       = BuiltInRegistries.BLOCK.get(identifier)
-                        .map(Holder.Reference::value);
-                if (type.isPresent()) {
-                    var unwrapped = type.get();
-                    return this.self.is(unwrapped);
-                }
-                return false;
+                var holder = BuiltInRegistries.BLOCK.wrapAsHolder(this.self.getBlock());
+                return holder.is(identifier);
             }
             throw new UnsupportedOperationException();
         };
         this.isIn = (args) -> {
             if (args.length == 1) {
                 var identifier = Tau.lower(ProxyIdentifier.MAPPED_TEMPLATE, args[0]);
-                var key        = TagKey.create(Registries.BLOCK, identifier);
-                return this.self.is(key);
+                var holder = BuiltInRegistries.BLOCK.wrapAsHolder(this.self.getBlock());
+                return holder.is(TagKey.create(Registries.BLOCK, identifier));
             }
             throw new UnsupportedOperationException();
         };
